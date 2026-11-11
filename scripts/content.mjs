@@ -4,6 +4,8 @@ import path from 'node:path';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const SITE_ORIGIN = 'https://dau-truong-ga-quan.bidv-it-grou-8424.chatgpt.site';
+export const SUPABASE_ROOM_API = 'https://rmbsxccrwrktbjlnezpu.supabase.co/functions/v1/rooster-rooms';
+export const PUBLIC_GAME_URL = 'https://quantrh.github.io/dau-truong-ga/';
 const scripts = ['peerjs.min.js', 'game-engine.js', 'rooster-net.js', 'controls.js', 'progression.js', 'game-app.js'];
 const mimeFor = name => name.endsWith('.woff') ? 'font/woff' : name.endsWith('.jpg') ? 'image/jpeg' : 'image/png';
 
@@ -30,7 +32,7 @@ export async function makeHTML({ standalone = false, external = false } = {}) {
   shell = shell.replace(/\/assets\/[a-zA-Z0-9_.-]+/g, assetURL);
   // Same-origin on the hosted site/preview; explicit production origin only
   // for the downloadable HTML and GitHub Pages frontend.
-  const config = `window.ROOSTER_ONLINE_ORIGIN=${JSON.stringify(standalone || external ? SITE_ORIGIN : '')};`;
+  const config = `window.ROOSTER_ONLINE_API=${JSON.stringify(SUPABASE_ROOM_API)};window.ROOSTER_PUBLIC_GAME_URL=${JSON.stringify(PUBLIC_GAME_URL)};window.ROOSTER_ONLINE_ORIGIN=${JSON.stringify(standalone || external ? SITE_ORIGIN : '')};`;
   const parts = [`<script>${config}window.ROOSTER_ASSETS=${JSON.stringify(map).replace(/<\//g, '<\\/')};</script>`];
   for (const name of scripts) {
     const script = await readFile(path.join(ROOT, 'client', name), 'utf8');
