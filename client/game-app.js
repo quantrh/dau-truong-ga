@@ -618,8 +618,22 @@
       ctx.strokeStyle='rgba(248,230,164,.17)';ctx.lineWidth=8;ctx.stroke();
     }
     ctx.restore();
-    if(playing&&f.stamina<15&&f.hp>0){
+    if(playing&&f.stamina<15&&f.hp>0&&selectedMode!=='training'){
       ctx.fillStyle='#fff1c8';ctx.font='600 12px "Noto Sans Game"';ctx.textAlign='center';ctx.letterSpacing='0px';ctx.fillText('HỒI THỂ LỰC',x,ground-altitude-282);
+    }
+    if(playing&&(selectedMode!=='training'||index===0)){
+      const close=selectedMode!=='training'&&Math.abs(game.state.fighters[0].x-game.state.fighters[1].x)<185;
+      const labelY=ground-altitude-248-(close&&index===1?28:0);
+      const label=fighterDisplayName(index);
+      const power=game.state.matchRules&&game.state.matchRules.powerMode==='progression'?' · P'+Math.round(f.powerRating||100):'';
+      ctx.save();ctx.textAlign='center';ctx.letterSpacing='0px';
+      ctx.font='700 13px "Noto Sans Game"';
+      const width=Math.max(76,ctx.measureText(label+power).width+26);
+      ctx.fillStyle='rgba(20,24,16,.78)';ctx.strokeStyle=index?'rgba(190,224,213,.62)':'rgba(238,195,111,.68)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.roundRect(x-width/2,labelY-18,width,27,8);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#fff3d5';ctx.shadowColor='#111';ctx.shadowBlur=5;ctx.fillText(label+power,x,labelY);ctx.shadowBlur=0;
+      if(isSelfFighter(index)){ctx.font='700 8px "Noto Sans Game"';ctx.fillStyle='#d8efac';ctx.fillText('BẠN',x,labelY+20);}
+      ctx.restore();
     }
     if(!playing&&!disconnected){
       ctx.save();ctx.font='600 13px "Noto Sans Game"';ctx.textAlign='center';ctx.letterSpacing='0px';
@@ -639,7 +653,7 @@
         const x=(d.x+time*d.speed)%1280,y=d.y+Math.sin(time*.25+d.x)*15;
         ctx.fillStyle='rgba(255,235,173,.23)';ctx.beginPath();ctx.arc(x,y,d.r,0,Math.PI*2);ctx.fill();
       });
-      game.state.fighters.forEach((f,i)=>drawRooster(f,i,time,dt));
+      game.state.fighters.forEach((f,i)=>{if(selectedMode!=='training'||i===0)drawRooster(f,i,time,dt);});
       particles=particles.filter(p=>p.life>0);
       particles.forEach(p=>{
         p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=p.kind==='dust'?-15:180;
