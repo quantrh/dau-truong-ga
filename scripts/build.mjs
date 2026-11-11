@@ -1,0 +1,20 @@
+import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises';
+import { ROOT, makeHTML, embeddedAssets } from './content.mjs';
+import path from 'node:path';
+import vm from 'node:vm';
+
+const html = await makeHTML();
+const assets = await embeddedAssets();
+const rooms = await readFile(path.join(ROOT, 'worker/rooms.js'), 'utf8');
+const wrapper = (await readFile(path.join(ROOT, 'worker/index.js'), 'utf8')).replace(/^import .*;\r?\n/gm, '');
+const generated = `const HTML=${JSON.stringify(html)};\nconst ASSETS=${JSON.stringify(assets)};\nconst VERSION='3.0.0';\n`;
+const worker = generated + rooms + '\n' + wrapper;
+await mkdir(path.join(ROOT, 'dist/server'), { recursive: true });
+await mkdir(path.join(ROOT, 'dist/.openai'), { recursive: true });
+await mkdir(path.join(ROOT, 'outputs'), { recursive: true });
+await writeFile(path.join(ROOT, 'dist/server/index.js'), worker);
+await copyFile(path.join(ROOT, '.openai/hosting.json'), path.join(ROOT, 'dist/.openai/hosting.json'));
+await writeFile(path.join(ROOT, 'outputs/dau-truong-ga.html'), await makeHTML({ standalone: true }));
+await writeFile(path.join(ROOT, 'outputs/github-index.html'), await makeHTML({ external: true }));
+for (const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) new vm.Script(script[1]);
+console.log(JSON.stringify({ built: true, htmlBytes: Buffer.byteLength(html), workerBytes: Buffer.byteLength(worker), assetCount: Object.keys(assets).length }));
