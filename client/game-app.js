@@ -2,7 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const canvas = $('gameCanvas'), ctx = canvas.getContext('2d', { alpha: false });
-  const game = new RoosterGame({ mode: 'bot' });
+  const game = new RoosterGame({ mode: 'training' });
   const names = ['Gà Điều', 'Gà Trắng'];
   const keys = new Set();
   const empty = () => ({left:false,right:false,jump:false,peck:false,kick:false,guard:false,dash:false});
@@ -10,7 +10,7 @@
   const images = { atlas: new Image(), background: new Image(), walk: new Image() };
   const sprites = window.ROOSTER_ASSETS.sprites;
   const walkSprites = window.ROOSTER_ASSETS.walkSprites;
-  let loaded = false, selectedMode = 'bot', playing = false, paused = false;
+  let loaded = false, selectedMode = 'training', playing = false, paused = false;
   let net = null, netEpoch = 0, onlineRole = null, disconnected = false;
   let remoteInput = empty(), lastRemoteInput = 0, lastState = 0;
   let inputSeq = 0, stateSeq = 0, lastInputSeq = -1, lastStateSeq = -1;
@@ -26,6 +26,9 @@
   let localActions = freshActions(), remoteActions = freshActions(), remotePending = freshActions();
   let remoteRelease = {jump:false,dash:false};
   let observedRound = 1;
+  const trainingSteps=['left','right','jump','peck','kick','guard','dash'];
+  let trainingDone=new Set(),trainingLastX=640;
+  let profileState=null,profileInitPromise=null;
   function clearRemoteActions(){remotePending=freshActions();remoteRelease={jump:false,dash:false};}
   function receiveActions(raw){
     if(!raw||typeof raw!=='object')return;
@@ -71,6 +74,98 @@
     onChange(){releaseKeys();updateControlLabels();}
   });
   const ambient = Array.from({length:28}, (_,i) => ({x:(i*173+97)%1280,y:120+(i*67)%500,r:.6+(i%3)*.5,speed:4+(i%5)}));
+
+  function profileRooster(){return profileState&&profileState.rooster?profileState.rooster:null;}
+  function updateProfileUI(){
+    const r=profileRooster();
+    if(!$('profileState'))return;
+    $('profileState').textContent=profileState&&profileState.ready?'Đã lưu':'Chưa kết nối';
+    $('profileState').style.color=profileState&&profileState.ready?'#bfe49e':'#d5a879';
+    if(r){
+      if(document.activeElement!==$('roosterName'))$('roosterName').value=r.name;
+      $('grainCount').textContent=String(r.grain);
+      $('grasshopperCount').textContent=String(r.grasshopper);
+      $('henCount').textContent=String(r.hen);
+      $('powerValue').textContent=String(r.powerRating);
+    }
+    updatePowerModeHint();
+  }
+  async function ensureProfile(){
+    if(profileState&&profileState.ready)return profileState;
+    if(profileInitPromise)return profileInitPromise;
+    profileInitPromise=RoosterProfile.init(playerName()).then(state=>{
+      profileState=state;updateProfileUI();
+      if(!state.ready&&state.error)toast('Supabase: '+state.error);
+      return state;
+    }).finally(()=>{profileInitPromise=null;});
+    return profileInitPromise;
+  }
+  async function profileIdentity(){
+    const state=await ensureProfile();
+    if(!state||!state.ready)return {accessToken:'',roosterId:'',roosterName:playerName()+' · Chiến kê',powerRating:100};
+    return RoosterProfile.identity();
+  }
+  function currentPowerMode(){return $('powerMode')&&$('powerMode').value==='progression'?'progression':'balanced';}
+  function updatePowerModeHint(){
+    if(!$('powerModeHint'))return;
+    const p=profileRooster()?profileRooster().powerRating:100;
+    $('powerModeHint').textContent=currentPowerMode()==='progression'
+      ?'Sức mạnh tích lũy: chiến kê của bạn dùng Power '+p+' (tối đa 130).'
+      :'Cân bằng: cả hai chiến kê vào trận với Power 100.';
+  }
+  function applyLocalPowerRules(mode){
+    if(mode==='training'){game.setMatchRules({powerMode:'balanced',powerRatings:[100,100]});return;}
+    const power=profileRooster()?profileRooster().powerRating:100;
+    game.setMatchRules({powerMode:currentPowerMode(),powerRatings:[power,100]});
+  }
+  function applyRoomPowerRules(room){
+    if(!room)return;
+    const host=room.host&&Number(room.host.powerRating)||100;
+    const guest=room.guest&&Number(room.guest.powerRating)||100;
+    const mode=room.matchMode==='progression'?'progression':'balanced';
+    if($('powerMode')){$('powerMode').value=mode;$('powerMode').disabled=true;}
+    game.setMatchRules({powerMode:mode,powerRatings:[host,guest]});
+    updatePowerModeHint();
+  }
+  function resetTrainingProgress(){
+    trainingDone=new Set();trainingLastX=game.state.fighters[0].x;
+    updateTrainingUI();
+  }
+  function updateTrainingUI(){
+    if(!$('trainingProgress'))return;
+    $('trainingProgress').textContent=trainingDone.size+' / 7 động tác';
+    const labels={left:'Sang trái',right:'Sang phải',jump:'Nhảy',peck:'Mổ',kick:'Đá',guard:'Giữ thế thủ',dash:'Lướt né'};
+    document.querySelectorAll('[data-training]').forEach(el=>{const action=el.dataset.training;el.classList.toggle('done',trainingDone.has(action));el.textContent=(trainingDone.has(action)?'✓ ':'')+labels[action]+' · '+controls.keyLabel(action,0);});
+    if(trainingDone.size===7)$('trainingProgress').textContent='7 / 7 động tác · Đã quen phím, tiếp tục tập tự do!';
+  }
+  function observeTraining(events,beforeX){
+    if(selectedMode!=='training'||!playing)return;
+    const f=game.state.fighters[0];
+    if(f.x<beforeX-.5)trainingDone.add('left');
+    if(f.x>beforeX+.5)trainingDone.add('right');
+    if(f.guarding)trainingDone.add('guard');
+    for(const event of events){
+      if(event.fighter!==0)continue;
+      if(event.type==='jump')trainingDone.add('jump');
+      if(event.type==='dash')trainingDone.add('dash');
+      if(event.type==='attack'&&event.kind==='peck')trainingDone.add('peck');
+      if(event.type==='attack'&&event.kind==='kick')trainingDone.add('kick');
+    }
+    updateTrainingUI();
+  }
+  function fighterDisplayName(index){
+    if(selectedMode==='online'&&roomRoster){
+      const p=index===0?roomRoster.host:roomRoster.guest;
+      return p?(p.roosterName||p.name):(index?'Gà Trắng':'Gà Điều');
+    }
+    if(index===0&&profileRooster())return profileRooster().name;
+    return names[index];
+  }
+  function isSelfFighter(index){
+    if(selectedMode==='training'||selectedMode==='bot')return index===0;
+    if(selectedMode==='online')return onlineRole==='guest'?index===1:index===0;
+    return false;
+  }
 
   function toast(text) {
     $('toast').textContent = text;
@@ -173,12 +268,14 @@
     $('rematchBtn').textContent='Đấu lại ↻';
   }
   function setRoles() {
-    const online=selectedMode==='online';
-    $('p0Role').textContent=online&&roomRoster?roomRoster.host.name+(onlineRole==='host'?' · BẠN':''):online?(onlineRole==='guest'?'ĐỐI THỦ':'BẠN'):'BẠN';
-    $('p1Role').textContent=online&&roomRoster&&roomRoster.guest?roomRoster.guest.name+(onlineRole==='guest'?' · BẠN':''):online?(onlineRole==='guest'?'BẠN':'ĐỐI THỦ'):selectedMode==='local'?'NGƯỜI 2':'MÁY';
-    $('modeLabel').textContent=online?'ĐẤU QUA MẠNG':selectedMode==='local'?'HAI NGƯỜI':'LUYỆN TẬP';
+    const online=selectedMode==='online',training=selectedMode==='training';
+    $('p0Role').textContent=online&&roomRoster?(roomRoster.host.roosterName||roomRoster.host.name)+(onlineRole==='host'?' · BẠN':''):online?(onlineRole==='guest'?'ĐỐI THỦ':'BẠN'):'BẠN';
+    $('p1Role').textContent=online&&roomRoster&&roomRoster.guest?(roomRoster.guest.roosterName||roomRoster.guest.name)+(onlineRole==='guest'?' · BẠN':''):online?(onlineRole==='guest'?'BẠN':'ĐỐI THỦ'):selectedMode==='local'?'NGƯỜI 2':'MÁY';
+    $('modeLabel').textContent=training?'TẬP MỘT MÌNH':online?'ĐẤU QUA MẠNG':selectedMode==='local'?'HAI NGƯỜI':'ĐẤU VỚI MÁY';
     $('p2Controls').hidden=selectedMode!=='local';
-    $('startCaption').textContent=selectedMode==='local'?'Người 1: Gà Điều · Người 2: Gà Trắng.':'Bạn điều khiển Gà Điều ở bên trái.';
+    const secondHud=$('p1Role').closest('.fighter-hud');if(secondHud)secondHud.style.visibility=training?'hidden':'';
+    canvas.setAttribute('aria-label',training?'Một chú gà trong sân tập; dùng bàn phím để thử từng động tác':'Hai chú gà thi đấu trong đấu trường');
+    $('startCaption').textContent=training?'Tập tự do, không giới hạn thời gian.':selectedMode==='local'?'Người 1: Gà Điều · Người 2: Gà Trắng.':'Bạn điều khiển Gà Điều ở bên trái.';
     updateControlLabels();
   }
   function releaseKeys() {
@@ -195,41 +292,56 @@
     onlineRole=null;remoteInput=empty();lastRemoteInput=0;roomRoster=null;networkHold=false;remoteFocused=true;remoteHostPaused=false;clearRemoteActions();
     $('roomCard').hidden=true;$('leaveBtn').hidden=true;$('roomRoster').hidden=true;$('playerName').disabled=false;
     $('createBtn').disabled=false;$('joinBtn').disabled=false;$('roomInput').disabled=false;
+    if($('powerMode'))$('powerMode').disabled=false;
     $('networkStatus').textContent='Tạo phòng hoặc nhập mã để kết nối.';
     $('networkStatus').classList.remove('error');
   }
   function lobby() {
     releaseKeys();closeNet();playing=false;paused=false;disconnected=false;
-    game.reset(selectedMode);resetVisuals();setRoles();
+    applyLocalPowerRules(selectedMode);game.reset(selectedMode);resetVisuals();setRoles();
     $('splash').hidden=false;$('sceneLabel').hidden=false;$('centerMessage').hidden=true;
-    $('pauseBtn').hidden=true;$('arenaHint').textContent='Sẵn sàng cho trận đấu đầu tiên?';
-    $('footerState').textContent='TẠO PHÒNG · MỜI BẠN · VÀO SÂN';
-    $('startBtn').textContent=loaded?'BẮT ĐẦU TRẬN →':'Đang tải hình…';
+    $('pauseBtn').hidden=true;
+    const training=selectedMode==='training';
+    $('arenaHint').textContent=training?'A/D di chuyển · Space nhảy · J/K ra đòn · L thủ · Shift trái lướt':'Sẵn sàng cho trận đấu đầu tiên?';
+    $('footerState').textContent=training?'TẬP TỰ DO · THỂ LỰC VÔ HẠN':'TẠO PHÒNG · MỜI BẠN · VÀO SÂN';
+    $('startBtn').textContent=loaded?(training?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →'):'Đang tải hình…';
     $('startBtn').disabled=!loaded;
+    if(training)resetTrainingProgress();
     updateHUD();
   }
   function selectMode(mode) {
-    if(mode===selectedMode)return;
-    selectedMode=mode;lobby();
+    if(!['training','bot','local','online'].includes(mode))mode='training';
+    const changed=mode!==selectedMode;
+    selectedMode=mode;
+    if(changed)lobby();
     document.querySelectorAll('.mode-card').forEach(button=>{
       const active=button.dataset.mode===mode;
       button.classList.toggle('selected',active);
       button.setAttribute('aria-pressed',String(active));
     });
     $('offlineOptions').hidden=mode==='online';$('onlineOptions').hidden=mode!=='online';
+    $('trainingCoach').hidden=mode!=='training';
+    $('matchFacts').hidden=mode==='training';
+    $('powerChoice').hidden=mode==='training';
+    $('startCaption').textContent=mode==='training'?'Tập tự do, không giới hạn thời gian.':mode==='local'?'Hai người dùng chung bàn phím.':'Bạn điều khiển Gà Điều ở bên trái.';
+    if(mode!=='online'&&$('powerMode'))$('powerMode').disabled=false;
+    updatePowerModeHint();
   }
   function beginGame(mode) {
     if(!loaded)return;
     playing=true;paused=false;disconnected=false;keys.clear();
+    if(mode!=='online')applyLocalPowerRules(mode);
+    else if(roomRoster)applyRoomPowerRules(roomRoster);
     game.reset(mode);resetVisuals();localActions=freshActions();remoteActions=freshActions();clearRemoteActions();networkHold=false;remoteHostPaused=false;remoteFocused=true;observedRound=1;
     remoteInput=empty();lastRemoteInput=performance.now();lastState=performance.now();
     lastStateSeq=-1;lastInputSeq=-1;stateClock=0;inputClock=0;
     $('splash').hidden=true;$('sceneLabel').hidden=true;
     $('pauseBtn').hidden=mode==='online';
     $('pauseBtn').textContent='II';
-    $('startBtn').textContent='CHƠI LẠI TỪ ĐẦU ↻';
+    $('startBtn').textContent=mode==='training'?'TẬP LẠI TỪ ĐẦU ↻':'CHƠI LẠI TỪ ĐẦU ↻';
     updateControlLabels();
-    $('footerState').textContent=mode==='online'?'MỖI NGƯỜI ĐIỀU KHIỂN MỘT CON GÀ':'ESC / P ĐỂ TẠM DỪNG';
+    $('footerState').textContent=mode==='training'?'TẬP TỰ DO · THỂ LỰC VÔ HẠN':mode==='online'?'MỖI NGƯỜI ĐIỀU KHIỂN MỘT CON GÀ':'ESC / P ĐỂ TẠM DỪNG';
+    if(mode==='training')resetTrainingProgress();
     setRoles();unlockAudio();updateHUD();$('arena').scrollIntoView({behavior:'smooth',block:'center'});
   }
   function showCenter(kicker,title,detail) {
@@ -256,6 +368,7 @@
     $('resultTitle').textContent=names[winner]+' chiến thắng';
     $('resultDetail').textContent='Tỉ số '+s.wins[0]+' – '+s.wins[1]+'. '+(winner===self?'Nhịp ra đòn rất tốt. Tiếp tục so tài?':'Giữ thể lực, chọn thời điểm và thử lại.');
     $('resultOverlay').hidden=false;$('centerMessage').hidden=true;$('pauseBtn').hidden=true;
+    if(selectedMode==='online')setTimeout(()=>{RoosterProfile.refresh().then(()=>{profileState=RoosterProfile.state;updateProfileUI();}).catch(()=>{});},1800);
   }
   function updateHUD() {
     const s=game.state;
@@ -265,9 +378,14 @@
       $('hp'+i).parentElement.setAttribute('aria-label','Sức chiến đấu '+names[i]+': '+Math.ceil(f.hp));
       Array.from($('wins'+i).children).forEach((el,j)=>el.classList.toggle('won',j<s.wins[i]));
     });
-    $('clock').textContent=String(Math.max(0,Math.ceil(s.roundTime))).padStart(2,'0');
-    $('clock').style.color=s.roundTime<=10?'#ffca8e':'';
-    $('roundLabel').textContent='HIỆP '+String(s.round).padStart(2,'0');
+    if(selectedMode==='training'){
+      $('clock').textContent='∞';$('clock').style.color='';$('clock').setAttribute('aria-label','Không giới hạn thời gian');
+      $('roundLabel').textContent='TẬP TỰ DO';
+    }else{
+      $('clock').textContent=String(Math.max(0,Math.ceil(s.roundTime))).padStart(2,'0');
+      $('clock').style.color=s.roundTime<=10?'#ffca8e':'';
+      $('roundLabel').textContent='HIỆP '+String(s.round).padStart(2,'0');
+    }
     $('arena').dataset.phase=playing?s.phase:'lobby';
     if(!playing) {
       if(!disconnected)$('liveStatus').textContent=net?(roomRoster&&roomRoster.guest?'2 NGƯỜI · CHỜ BẮT ĐẦU':'CHỜ BẠN VÀO PHÒNG'):'SẴN SÀNG';
@@ -275,7 +393,7 @@
     }
     if(selectedMode==='online'&&net&&net.connected) {
       $('liveStatus').textContent='ONLINE · '+(net.ping===null?'ĐANG KẾT NỐI':net.ping+' MS');
-    } else $('liveStatus').textContent=paused?'TẠM DỪNG':selectedMode==='local'?'2 NGƯỜI CÙNG MÁY':'ĐẤU VỚI MÁY';
+    } else $('liveStatus').textContent=paused?'TẠM DỪNG':selectedMode==='training'?'TẬP MỘT MÌNH · THỂ LỰC VÔ HẠN':selectedMode==='local'?'2 NGƯỜI CÙNG MÁY':'ĐẤU VỚI MÁY';
     if(selectedMode==='online'&&networkHold&&!resultShown){showCenter('TRẬN ĐẤU ĐANG CHỜ','Chờ một nhịp…',document.hidden?'Quay lại tab game để tiếp tục.':remoteHostPaused||!remoteFocused?'Bạn chơi đang tạm rời tab hoặc chờ kết nối.':'Đang chờ dữ liệu từ bạn chơi. Trận sẽ tự tiếp tục.');return;}
     if(paused) {showCenter('NGHỈ MỘT NHỊP','Tạm dừng','Nhấn P, Esc hoặc ▶ để tiếp tục');return;}
     if(selectedMode==='online'&&onlineRole==='guest'&&performance.now()-lastState>2000&&!resultShown) {
@@ -310,12 +428,13 @@
   }
   function renderRoom(room){
     roomRoster=room;onlineRole=net?net.role:onlineRole;
+    applyRoomPowerRules(room);
     document.querySelector('.lobby').classList.add('in-room');$('lobbyTitle').textContent='PHÒNG CHƠI ONLINE';
     const self=onlineRole==='guest'?room.guest:room.host;
     $('roomRoster').hidden=false;$('roomCard').hidden=false;
     $('roomCode').textContent=room.code;$('roomCount').textContent=room.guest?'2 / 2':'1 / 2';
-    $('hostName').textContent=room.host.name+(onlineRole==='host'?' (bạn)':'');
-    $('guestName').textContent=room.guest?room.guest.name+(onlineRole==='guest'?' (bạn)':''):'Đang chờ bạn…';
+    $('hostName').textContent=(room.host.roosterName||room.host.name)+' · P'+(room.host.powerRating||100)+(onlineRole==='host'?' (bạn)':'');
+    $('guestName').textContent=room.guest?(room.guest.roosterName||room.guest.name)+' · P'+(room.guest.powerRating||100)+(onlineRole==='guest'?' (bạn)':''):'Đang chờ bạn…';
     for(const role of ['host','guest']){
       const player=room[role],chip=$(role+'Ready');
       chip.textContent=!player?'—':!player.online?'Kết nối…':room.status==='playing'?'Trong trận':player.ready?'Sẵn sàng':'Chưa sẵn sàng';
@@ -350,6 +469,7 @@
       onConnect(info){
         if(epoch!==netEpoch)return;
         onlineRole=info.role;lastState=performance.now();
+        if(roomRoster)applyRoomPowerRules(roomRoster);
         beginGame('online');
         if(info.role==='host')net.send({type:'start',state:game.snapshot(),seq:++stateSeq,paused:false});
         else showCenter('ĐÃ KẾT NỐI','Sẵn sàng','Đang nhận trận đấu từ chủ phòng');
@@ -385,8 +505,9 @@
   async function hostRoom(){
     if(!loaded){toast('Chờ hình ảnh tải xong rồi tạo phòng.');return;}
     playing=false;disconnected=false;resetVisuals();releaseKeys();$('splash').hidden=false;$('sceneLabel').hidden=false;
+    const identity=await profileIdentity();
     const current=createNetwork();
-    try{await current.create(playerName());}
+    try{await current.create(playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId,matchMode:currentPowerMode()});}
     catch(error){if(current===net){$('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');}}
   }
   async function joinRoom(event){
@@ -395,8 +516,9 @@
     const code=$('roomInput').value.trim().toUpperCase();
     if(!RoosterNet.validCode(code)){toast('Nhập đúng mã phòng 6 ký tự.');return;}
     playing=false;disconnected=false;resetVisuals();releaseKeys();$('splash').hidden=false;$('sceneLabel').hidden=false;
+    const identity=await profileIdentity();
     const current=createNetwork();
-    try{await current.join(code,playerName());}
+    try{await current.join(code,playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId});}
     catch(error){if(current===net){$('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');}}
   }
   function startRematch(){
@@ -426,21 +548,30 @@
     const phaseIndex=Math.floor(((phase/(Math.PI*2))%1)*4)%4;
     const frame=reverse?(4-phaseIndex)%4:phaseIndex;
     let pose='idle', source=images.atlas, scale=.635;
+    const airborne=playing&&f.y>12;
+    let airAttack=null,airAttackPower=0;
     let lift=0,lunge=0,lean=(f.vx/310)*f.facing*.045;
     let squash=f.action==='guard'?.11:0;
     let bob=moving?Math.abs(Math.sin(phase*2))*3*moveBlend:Math.sin(time*2.4+index)*.8;
     if(f.action==='peck'){
-      const progress=Math.min(1,f.attackTimer/.43);
-      pose=progress>.15&&progress<.78?'peck':'idle';
-      lunge=Math.sin(progress*Math.PI)*16;
-      squash+=Math.sin(progress*Math.PI)*.035;
+      const progress=Math.min(1,f.attackTimer/.43),arc=Math.sin(progress*Math.PI);
+      pose=progress>.15&&progress<.86?'peck':'idle';
+      if(airborne){
+        airAttack='peck';airAttackPower=arc;
+        lunge=arc*34;lean-=arc*.22;squash-=arc*.035;lift+=arc*11;
+      }else{
+        lunge=arc*16;squash+=arc*.035;
+      }
     }else if(f.action==='kick'){
-      const progress=Math.min(1,f.attackTimer/.7);
-      pose=progress>.2&&progress<.8?'kick':'idle';
-      lift=Math.sin(progress*Math.PI)*37;
-      lean-=Math.sin(progress*Math.PI)*.065;
-      lunge=Math.sin(progress*Math.PI)*18;
-      if(progress<.2)squash+=Math.sin(progress/.2*Math.PI)*.09;
+      const progress=Math.min(1,f.attackTimer/.7),arc=Math.sin(progress*Math.PI);
+      pose=progress>.14&&progress<.88?'kick':'idle';
+      if(airborne){
+        airAttack='kick';airAttackPower=arc;
+        lift=arc*50;lean-=arc*.26;lunge=arc*34;squash-=arc*.06;
+      }else{
+        lift=arc*37;lean-=arc*.065;lunge=arc*18;
+        if(progress<.2)squash+=Math.sin(progress/.2*Math.PI)*.09;
+      }
     }else if(f.action==='jump'){
       pose='kick';lean=-Math.max(-.07,Math.min(.09,f.vy/650*.075));
       bob+=Math.sin(time*19)*1.6;
@@ -483,6 +614,10 @@
         ctx.save();ctx.globalAlpha=.045*(3-trail);ctx.translate(-f.dashDirection*f.facing*trail*19,0);draw();ctx.restore();
       }
     }
+    if(airAttack&&airAttackPower>.12&&!reduced){
+      ctx.save();ctx.globalAlpha=.12*airAttackPower;ctx.strokeStyle=airAttack==='kick'?'#fff0a8':'#f4d78e';ctx.lineWidth=5;
+      ctx.beginPath();ctx.arc(-18,-112,76,-.9,.55);ctx.stroke();ctx.restore();
+    }
     if(f.hitFlash>0)ctx.filter='brightness('+(1+f.hitFlash*1.7)+')';
     else if(f.invulnTimer>0)ctx.filter='brightness(1.1)';
     draw();ctx.filter='none';
@@ -492,8 +627,22 @@
       ctx.strokeStyle='rgba(248,230,164,.17)';ctx.lineWidth=8;ctx.stroke();
     }
     ctx.restore();
-    if(playing&&f.stamina<15&&f.hp>0){
+    if(playing&&f.stamina<15&&f.hp>0&&selectedMode!=='training'){
       ctx.fillStyle='#fff1c8';ctx.font='600 12px "Noto Sans Game"';ctx.textAlign='center';ctx.letterSpacing='0px';ctx.fillText('HỒI THỂ LỰC',x,ground-altitude-282);
+    }
+    if(playing&&(selectedMode!=='training'||index===0)){
+      const close=selectedMode!=='training'&&Math.abs(game.state.fighters[0].x-game.state.fighters[1].x)<185;
+      const labelY=ground-altitude-248-(close&&index===1?28:0);
+      const label=fighterDisplayName(index);
+      const power=game.state.matchRules&&game.state.matchRules.powerMode==='progression'?' · P'+Math.round(f.powerRating||100):'';
+      ctx.save();ctx.textAlign='center';ctx.letterSpacing='0px';
+      ctx.font='700 13px "Noto Sans Game"';
+      const width=Math.max(76,ctx.measureText(label+power).width+26);
+      ctx.fillStyle='rgba(20,24,16,.78)';ctx.strokeStyle=index?'rgba(190,224,213,.62)':'rgba(238,195,111,.68)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.roundRect(x-width/2,labelY-18,width,27,8);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#fff3d5';ctx.shadowColor='#111';ctx.shadowBlur=5;ctx.fillText(label+power,x,labelY);ctx.shadowBlur=0;
+      if(isSelfFighter(index)){ctx.font='700 8px "Noto Sans Game"';ctx.fillStyle='#d8efac';ctx.fillText('BẠN',x,labelY+20);}
+      ctx.restore();
     }
     if(!playing&&!disconnected){
       ctx.save();ctx.font='600 13px "Noto Sans Game"';ctx.textAlign='center';ctx.letterSpacing='0px';
@@ -513,7 +662,7 @@
         const x=(d.x+time*d.speed)%1280,y=d.y+Math.sin(time*.25+d.x)*15;
         ctx.fillStyle='rgba(255,235,173,.23)';ctx.beginPath();ctx.arc(x,y,d.r,0,Math.PI*2);ctx.fill();
       });
-      game.state.fighters.forEach((f,i)=>drawRooster(f,i,time,dt));
+      game.state.fighters.forEach((f,i)=>{if(selectedMode!=='training'||i===0)drawRooster(f,i,time,dt);});
       particles=particles.filter(p=>p.life>0);
       particles.forEach(p=>{
         p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=p.kind==='dust'?-15:180;
@@ -535,22 +684,26 @@
       if(selectedMode==='online'&&net&&net.connected){
         const oldHold=networkHold;
         if(onlineRole==='host'){
-          networkHold=document.hidden||!remoteFocused||now-lastRemoteInput>2200;
-          if(networkHold){remoteInput=empty();clearRemoteActions();}
-          else{
-            if(game.state.phase!=='fight'||game.state.round!==observedRound){clearRemoteActions();observedRound=game.state.round;}
-            game.step(dt,[inputFor(0),remoteControls()]);effects(game.drainEvents());
-          }
+          const stallLimit=Math.max(6500,Math.min(15000,6500+(net.ping||0)*8));
+          networkHold=now-lastState>stallLimit;
+          if(now-lastRemoteInput>1400){remoteInput=empty();clearRemoteActions();}
+          if(game.state.phase!=='fight'||game.state.round!==observedRound){clearRemoteActions();observedRound=game.state.round;}
+          game.step(dt,[inputFor(0),remoteControls()]);effects(game.drainEvents());
           stateClock+=dt;
-          if(stateClock>=.05){stateClock=0;net.send({type:'state',seq:++stateSeq,state:game.snapshot(),paused:networkHold});}
+          if(stateClock>=.05){stateClock=0;net.send({type:'state',seq:++stateSeq,state:game.snapshot(),paused:false});}
         }else{
-          networkHold=remoteHostPaused||now-lastState>2200||document.hidden;
+          const stallLimit=Math.max(6500,Math.min(15000,6500+(net.ping||0)*8));
+          networkHold=remoteHostPaused||now-lastState>stallLimit;
           inputClock+=dt;
           if(inputClock>=1/30){inputClock=0;sendInput();}
         }
         if(oldHold!==networkHold)hudState='';
       }else if(selectedMode!=='online'){
-        game.step(dt,[inputFor(0),inputFor(1)]);effects(game.drainEvents());
+        const beforeX=game.state.fighters[0].x;
+        game.step(dt,[inputFor(0),inputFor(1)]);
+        const events=game.drainEvents();
+        if(selectedMode==='training')observeTraining(events,beforeX);
+        effects(events);
       }
     }
     uiClock+=dt;if(uiClock>.065){uiClock=0;updateHUD();}
@@ -576,6 +729,13 @@
     if(!document.hidden)lastLogic=performance.now();
   });
   document.querySelectorAll('.mode-card').forEach(b=>b.addEventListener('click',()=>selectMode(b.dataset.mode)));
+  $('powerMode').addEventListener('change',()=>{applyLocalPowerRules(selectedMode);updatePowerModeHint();});
+  $('saveRoosterName').addEventListener('click',async()=>{
+    try{await ensureProfile();const r=await RoosterProfile.rename($('roosterName').value);profileState=RoosterProfile.state;updateProfileUI();toast('Đã lưu tên chiến kê: '+r.name+'.');}
+    catch(error){toast('Không lưu được tên chiến kê: '+error.message);}
+  });
+  $('resetTrainingBtn').addEventListener('click',()=>{if(selectedMode==='training')beginGame('training');});
+  $('exitTrainingBtn').addEventListener('click',()=>selectMode('bot'));
   $('startBtn').addEventListener('click',()=>beginGame(selectedMode));
   $('createBtn').addEventListener('click',hostRoom);
   $('joinForm').addEventListener('submit',joinRoom);
@@ -646,17 +806,19 @@
     document.fonts.load('700 16px "Noto Sans Game"', 'Đánh đúng lúc, thắng đúng nhịp'),
     document.fonts.load('italic 400 16px "Noto Sans Game"', 'Bản lĩnh trong từng nhịp cánh')
   ]).then(()=>{
-    loaded=true;$('loading').hidden=true;$('startBtn').disabled=false;$('startBtn').textContent='BẮT ĐẦU TRẬN →';
+    loaded=true;$('loading').hidden=true;$('startBtn').disabled=false;$('startBtn').textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →';
     setRoles();updateHUD();
   }).catch(()=>{
     $('loading').textContent='Không đọc được hình ảnh hoặc font chữ. Hãy tải lại file HTML đầy đủ rồi mở lại.';
   });
   try{$('playerName').value=localStorage.getItem('rooster-player-name')||'';}catch(_){}
-  setRoles();selectMode('online');
   const invitedCode=new URLSearchParams(location.search).get('room');
+  selectMode(invitedCode&&RoosterNet.validCode(invitedCode)?'online':'training');
   if(invitedCode&&RoosterNet.validCode(invitedCode)){
     $('roomInput').value=invitedCode.toUpperCase();
     $('networkStatus').textContent='Bạn được mời vào phòng '+invitedCode.toUpperCase()+'. Nhập tên rồi bấm Vào.';
   }
+  ensureProfile().then(()=>{profileState=RoosterProfile.state;updateProfileUI();setRoles();}).catch(()=>{});
+  updateTrainingUI();setRoles();
   setInterval(tick,1000/60);requestAnimationFrame(render);
 })();

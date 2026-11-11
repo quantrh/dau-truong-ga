@@ -18,6 +18,7 @@ class RoomError extends Error {
 const fail=(status:number,code:string,message:string):never=>{throw new RoomError(status,code,message);};
 const integer=(v:unknown)=>Number.isSafeInteger(v)&&Number(v)>=0;
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==="object"&&!Array.isArray(v);
+const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 const headers={...corsHeaders,"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"};
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers});
 
@@ -94,8 +95,9 @@ function responseData(row:any,role:"host"|"guest",now:number){
     code:row.code,role,
     room:{
       code:row.code,status:row.status,matchId:row.match_id,peerKey:row.peer_key,
-      host:{name:row.host_name,ready:!!row.host_ready,online:row.status!=="closed"&&now-Number(row.host_seen)<=ONLINE_MS},
-      guest:row.guest_hash?{name:row.guest_name||"Bạn chơi",ready:!!row.guest_ready,online:row.status!=="closed"&&now-Number(row.guest_seen||0)<=ONLINE_MS}:null
+      matchMode:row.match_mode||"balanced",
+      host:{name:row.host_name,roosterName:row.host_rooster_name||row.host_name,powerRating:Number(row.host_power||100),ready:!!row.host_ready,online:row.status!=="closed"&&now-Number(row.host_seen)<=ONLINE_MS},
+      guest:row.guest_hash?{name:row.guest_name||"Bạn chơi",roosterName:row.guest_rooster_name||row.guest_name||"Chiến kê",powerRating:Number(row.guest_power||100),ready:!!row.guest_ready,online:row.status!=="closed"&&now-Number(row.guest_seen||0)<=ONLINE_MS}:null
     },
     peer:{seq:Number(row[other+"_seq"]||0),payload:row[other+"_payload"]||{}},
     serverTime:now
@@ -105,6 +107,47 @@ async function getRoom(code:string){
   const {data,error}=await admin.from("game_rooms").select("*").eq("code",code).maybeSingle();
   if(error)throw error;
   return data;
+}
+async function resolvePlayer(raw:any){
+  if(!object(raw))return null;
+  const accessToken=typeof raw.accessToken==="string"?raw.accessToken:"";
+  const roosterId=typeof raw.roosterId==="string"?raw.roosterId:"";
+  if(!accessToken||!roosterId)return null;
+  const {data:userData,error:userError}=await admin.auth.getUser(accessToken);
+  if(userError||!userData.user)return null;
+  const {data:rooster,error}=await admin.from("game_rooster_stats").select("*").eq("id",roosterId).eq("owner_id",userData.user.id).maybeSingle();
+  if(error||!rooster)return null;
+  return {
+    ownerId:userData.user.id,
+    roosterId:rooster.id,
+    roosterName:String(rooster.name||"Chiến kê").slice(0,24),
+    powerRating:clamp(Math.round(Number(rooster.power_rating||100)),100,130)
+  };
+}
+async function awardMatch(row:any,payload:any,now:number){
+  if(row.rewarded_at||!payload||!payload.state||!payload.state.state)return;
+  const state=payload.state.state;
+  if(state.phase!=="matchEnd"||![0,1].includes(state.matchWinner)||!Array.isArray(state.wins))return;
+  const {data,error}=await admin.rpc("game_award_match",{
+    p_room_code:row.code,
+    p_room_match_key:row.code+":"+row.match_id,
+    p_match_mode:row.match_mode==="progression"?"progression":"balanced",
+    p_host_owner_id:row.host_owner_id,
+    p_guest_owner_id:row.guest_owner_id,
+    p_host_rooster_id:row.host_rooster_id,
+    p_guest_rooster_id:row.guest_rooster_id,
+    p_host_power:Number(row.host_power||100),
+    p_guest_power:Number(row.guest_power||100),
+    p_winner_index:Number(state.matchWinner),
+    p_host_wins:Number(state.wins[0]||0),
+    p_guest_wins:Number(state.wins[1]||0),
+    p_started_at:new Date(Number(row.created_at)).toISOString(),
+    p_ended_at:new Date(now).toISOString()
+  });
+  if(error)throw error;
+  if(data&&data.awarded){
+    await admin.from("game_rooms").update({rewarded_at:now}).eq("code",row.code).is("rewarded_at",null);
+  }
 }
 async function requireActive(row:any,now:number){
   if(row.status==="closed")fail(410,"ROOM_CLOSED","Phòng đã đóng. Hãy tạo phòng mới để tiếp tục.");
@@ -116,12 +159,14 @@ async function requireActive(row:any,now:number){
 async function createRoom(body:any,now:number){
   const hash=await hashToken(String(body.sessionToken||""));
   const name=cleanName(body.name,"host");
+  const player=await resolvePlayer(body.player);
+  const matchMode=object(body.player)&&body.player.matchMode==="progression"?"progression":"balanced";
   const {data:existing,error:e1}=await admin.from("game_rooms").select("*").eq("host_hash",hash).maybeSingle();
   if(e1)throw e1;
   if(existing){await requireActive(existing,now);return json(responseData(existing,"host",now));}
   for(let attempt=0;attempt<5;attempt++){
     const code=roomCode();
-    const row={code,match_id:randomHex(),peer_key:randomHex(),host_hash:hash,host_name:name,host_seen:now,created_at:now,updated_at:now,expires_at:now+LOBBY_TTL_MS};
+    const row={code,match_id:randomHex(),peer_key:randomHex(),host_hash:hash,host_name:name,host_seen:now,created_at:now,updated_at:now,expires_at:now+LOBBY_TTL_MS,match_mode:matchMode,host_owner_id:player&&player.ownerId||null,host_rooster_id:player&&player.roosterId||null,host_rooster_name:player&&player.roosterName||name,host_power:player&&player.powerRating||100};
     const {data,error}=await admin.from("game_rooms").insert(row).select("*").maybeSingle();
     if(!error&&data)return json(responseData(data,"host",now),201);
     if(error&&!/duplicate|unique/i.test(error.message||""))throw error;
@@ -133,6 +178,7 @@ async function createRoom(body:any,now:number){
 async function joinRoom(code:string,body:any,now:number){
   const hash=await hashToken(String(body.sessionToken||""));
   const name=cleanName(body.name,"guest");
+  const player=await resolvePlayer(body.player);
   let row=await getRoom(code);
   if(!row)fail(404,"ROOM_NOT_FOUND","Không tìm thấy phòng. Hãy kiểm tra lại mã 6 ký tự.");
   await requireActive(row,now);
@@ -140,7 +186,7 @@ async function joinRoom(code:string,body:any,now:number){
   if(row.guest_hash===hash)return json(responseData(row,"guest",now));
   if(row.guest_hash||row.status!=="waiting")fail(409,"ROOM_FULL","Phòng đã đủ hai người. Hãy dùng mã phòng khác.");
   const {data,error}=await admin.from("game_rooms")
-    .update({guest_hash:hash,guest_name:name,guest_seen:now,guest_ready:false,updated_at:now,expires_at:now+LOBBY_TTL_MS})
+    .update({guest_hash:hash,guest_name:name,guest_seen:now,guest_ready:false,updated_at:now,expires_at:now+LOBBY_TTL_MS,guest_owner_id:player&&player.ownerId||null,guest_rooster_id:player&&player.roosterId||null,guest_rooster_name:player&&player.roosterName||name,guest_power:player&&player.powerRating||100})
     .eq("code",code).eq("status","waiting").is("guest_hash",null)
     .select("*").maybeSingle();
   if(error&&/duplicate|unique/i.test(error.message||""))fail(409,"SESSION_IN_USE","Phiên kết nối này đã ở phòng khác.");
@@ -174,6 +220,7 @@ async function memberAction(req:Request,code:string,action:string,body:any,now:n
     if(seq>Number(row[seqKey]||0)){update[seqKey]=seq;update[payloadKey]=payload;}
     const {data,error}=await admin.from("game_rooms").update(update).eq("code",code).neq("status","closed").select("*").maybeSingle();
     if(error)throw error;if(!data)fail(410,"ROOM_CLOSED","Phòng đã đóng. Hãy tạo phòng mới.");
+    if(role==="host")await awardMatch(data,payload,now);
     return json(responseData(data,role,now));
   }
   if(action==="ready"){

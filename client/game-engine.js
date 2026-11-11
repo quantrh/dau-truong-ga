@@ -8,7 +8,7 @@
   const ACTIONS = ['idle', 'walk', 'jump', 'peck', 'kick', 'guard', 'dash', 'hurt', 'win'];
   const ATTACKS = {
     peck: { start: 0.105, active: 0.105, total: 0.43, cost: 11, damage: 9, range: 155, height: 112, push: 165 },
-    kick: { start: 0.225, active: 0.15, total: 0.70, cost: 25, damage: 21, range: 205, height: 151, push: 315 }
+    kick: { start: 0.075, active: 0.15, total: 0.70, cost: 25, damage: 21, range: 205, height: 151, push: 315 }
   };
   const DASH = { duration: 0.18, cooldown: 0.8, cost: 18, speed: 660, invulnerable: 0.1 };
   const emptyInput = () => ({ left: false, right: false, jump: false, peck: false, kick: false, guard: false, dash: false });
@@ -30,7 +30,7 @@
       hurtTimer: 0, regenLock: 0, jumpCooldown: 0,
       jumpBuffer: 0, landTimer: 0, gaitPhase: 0, moveBlend: 0,
       dashTimer: 0, dashCooldown: 0, dashDirection: index ? 1 : -1, invulnTimer: 0,
-      combo: 0, comboTimer: 0, damageDone: 0
+      combo: 0, comboTimer: 0, damageDone: 0, powerRating: 100
     };
   }
 
@@ -42,21 +42,42 @@
       this._seed = ((options.seed || Date.now()) >>> 0) || 1;
       this._eventSeq = 0;
       this._events = [];
+      this._matchRules = { powerMode: 'balanced', powerRatings: [100, 100] };
+      this.setMatchRules(options.matchRules || {});
       this.reset(options.mode || 'bot');
+    }
+
+    setMatchRules(rules = {}) {
+      const mode = rules.powerMode === 'progression' ? 'progression' : 'balanced';
+      const ratings = Array.isArray(rules.powerRatings) ? rules.powerRatings : [100,100];
+      this._matchRules = { powerMode: mode, powerRatings: [0,1].map(i => clamp(Math.round(finite(ratings[i],100)),100,130)) };
+      if (this.state) {
+        this.state.matchRules = copy(this._matchRules);
+        this.state.fighters.forEach((f,i)=>{ f.powerRating = this._matchRules.powerMode === 'progression' ? this._matchRules.powerRatings[i] : 100; });
+      }
+      return copy(this._matchRules);
     }
 
     reset(mode = this.state ? this.state.mode : 'bot') {
       if (mode && typeof mode === 'object') mode = mode.mode;
-      if (!['bot', 'local', 'online'].includes(mode)) mode = 'bot';
+      if (!['training', 'bot', 'local', 'online'].includes(mode)) mode = 'bot';
       this.state = {
         version: 1, mode, width: W, ground: GROUND,
-        phase: 'countdown', phaseTime: 3, elapsed: 0,
+        phase: mode === 'training' ? 'fight' : 'countdown', phaseTime: mode === 'training' ? 0 : 3, elapsed: 0,
         round: 1, roundTime: this.roundSeconds, roundSeconds: this.roundSeconds,
         wins: [0, 0], roundWinner: -1, matchWinner: -1,
         resultReason: '', fighters: [makeFighter(0), makeFighter(1)],
-        eventId: this._eventSeq, recentEvents: []
+        matchRules: copy(this._matchRules), eventId: this._eventSeq, recentEvents: []
       };
+      this.state.fighters.forEach((f,i)=>{ f.powerRating = this._matchRules.powerMode === 'progression' ? this._matchRules.powerRatings[i] : 100; });
       this._bots = [false, mode === 'bot'];
+      if (mode === 'training') {
+        this.state.fighters[0].x = 640;
+        this.state.fighters[0].facing = 1;
+        this.state.fighters[1].x = 1165;
+        this.state.fighters[1].hp = 100;
+        this.state.fighters[1].stamina = 100;
+      }
       this._previous = [emptyInput(), emptyInput()];
       this._botState = [this._newBot(), this._newBot()];
       this._events = [];
@@ -111,8 +132,12 @@
       safe.wins = safe.wins.map(v => clamp(Math.floor(finite(v)), 0, 2));
       safe.roundWinner = [-1, 0, 1].includes(safe.roundWinner) ? safe.roundWinner : -1;
       safe.matchWinner = [-1, 0, 1].includes(safe.matchWinner) ? safe.matchWinner : -1;
-      safe.mode = ['bot', 'local', 'online'].includes(safe.mode) ? safe.mode : 'online';
+      safe.mode = ['training', 'bot', 'local', 'online'].includes(safe.mode) ? safe.mode : 'online';
       safe.resultReason = ['knockout', 'timeout', 'draw', ''].includes(safe.resultReason) ? safe.resultReason : '';
+      const incomingRules = safe.matchRules && typeof safe.matchRules === 'object' ? safe.matchRules : {};
+      const powerMode = incomingRules.powerMode === 'progression' ? 'progression' : 'balanced';
+      const powerRatings = Array.isArray(incomingRules.powerRatings) ? incomingRules.powerRatings : [100,100];
+      safe.matchRules = { powerMode, powerRatings: [0,1].map(i=>clamp(Math.round(finite(powerRatings[i],100)),100,130)) };
       safe.eventId = Math.max(0, finite(safe.eventId));
       safe.recentEvents = Array.isArray(safe.recentEvents) ? safe.recentEvents.slice(-16) : [];
       for (let i = 0; i < 2; i++) {
@@ -139,8 +164,10 @@
         f.dashDirection = f.dashDirection < 0 ? -1 : 1;
         f.combo = clamp(Math.floor(finite(f.combo)), 0, 1000);
         f.damageDone = Math.max(0, finite(f.damageDone));
+        f.powerRating = safe.matchRules.powerMode === 'progression' ? safe.matchRules.powerRatings[i] : 100;
       }
       this.state = safe;
+      this._matchRules = copy(safe.matchRules);
       this.roundSeconds = safe.roundSeconds;
       this._eventSeq = Math.max(this._eventSeq, safe.eventId);
       return true;
@@ -189,6 +216,7 @@
           s.phase = 'countdown'; s.phaseTime = 2.5;
           s.roundWinner = -1; s.resultReason = '';
           s.fighters = [makeFighter(0), makeFighter(1)];
+          s.fighters.forEach((f,i)=>{ f.powerRating = s.matchRules.powerMode === 'progression' ? s.matchRules.powerRatings[i] : 100; });
           this._previous = [emptyInput(), emptyInput()];
           this._botState = [this._newBot(), this._newBot()];
           this._emit('newRound', { round: s.round });
@@ -196,8 +224,22 @@
         return;
       }
 
-      s.roundTime = Math.max(0, s.roundTime - dt);
       const inputs = supplied.map((input, index) => this._bots[index] ? this._botInput(index, dt) : input);
+      if (s.mode === 'training') {
+        this._moveFighter(0, inputs[0], dt);
+        const trainee = s.fighters[0];
+        trainee.stamina = 100;
+        trainee.hp = 100;
+        s.roundTime = this.roundSeconds;
+        s.phase = 'fight';
+        s.phaseTime = 0;
+        s.roundWinner = -1;
+        s.matchWinner = -1;
+        s.resultReason = '';
+        this._previous = inputs.map(cleanInput);
+        return;
+      }
+      s.roundTime = Math.max(0, s.roundTime - dt);
       // Both fighters complete their movement before any hit is evaluated.
       for (let i = 0; i < 2; i++) this._moveFighter(i, inputs[i], dt);
       this._separate();
@@ -249,9 +291,12 @@
           f.attackType = ''; f.attackTimer = 0; f.attackConnected = false;
         }
       }
-      if (!f.attackType && f.hurtTimer <= 0 && f.dashTimer <= 0) f.facing = other.x >= f.x ? 1 : -1;
-      f.guarding = input.guard && f.y <= 1 && !f.attackType && f.hurtTimer <= 0 && f.stamina > 3 && f.dashTimer <= 0;
       const direction = Number(input.right) - Number(input.left);
+      if (!f.attackType && f.hurtTimer <= 0 && f.dashTimer <= 0) {
+        if (this.state.mode === 'training' && direction) f.facing = direction > 0 ? 1 : -1;
+        else if (this.state.mode !== 'training') f.facing = other.x >= f.x ? 1 : -1;
+      }
+      f.guarding = input.guard && f.y <= 1 && !f.attackType && f.hurtTimer <= 0 && f.stamina > 3 && f.dashTimer <= 0;
       const speed = f.guarding ? 115 : f.attackType ? 80 : 310;
       if (f.hurtTimer <= 0) {
         if (input.dash && !this._previous[i].dash && f.y === 0 && f.vy === 0 &&
@@ -275,7 +320,7 @@
         }
         if (f.jumpBuffer > 0 && f.y === 0 && f.jumpCooldown <= 0 && !f.guarding &&
             !f.attackType && f.dashTimer <= 0 && f.stamina >= 9) {
-          f.vy = 655; f.stamina -= 9; f.regenLock = 0.45; f.jumpCooldown = 0.3;
+          f.vy = 700; f.stamina -= 9; f.regenLock = 0.45; f.jumpCooldown = 0.3;
           f.jumpBuffer = 0; f.landTimer = 0;
           this._emit('jump', { fighter: i, x: f.x });
         }
@@ -284,7 +329,9 @@
           if (kind && f.stamina >= ATTACKS[kind].cost) {
             f.attackType = kind; f.attackTimer = 0; f.attackConnected = false;
             f.stamina -= ATTACKS[kind].cost; f.regenLock = 0.55;
-            f.facing = other.x >= f.x ? 1 : -1;
+            if (this.state.mode === 'training') {
+              if (direction) f.facing = direction > 0 ? 1 : -1;
+            } else f.facing = other.x >= f.x ? 1 : -1;
             f.vx += f.facing * (kind === 'kick' ? 145 : 55);
             this._setAction(f, kind);
             this._emit('attack', { fighter: i, kind });
@@ -336,7 +383,10 @@
     }
 
     _hit({ a, b, attack, kind }) {
-      let damage = attack.damage + (kind === 'kick' && a.y > 20 ? 3 : 0);
+      const airborne = a.y > 20;
+      const airBonus = airborne ? (kind === 'kick' ? 4 : 2) : 0;
+      const powerMultiplier = this.state.matchRules && this.state.matchRules.powerMode === 'progression' ? 1 + (clamp(finite(a.powerRating,100),100,130) - 100) / 200 : 1;
+      let damage = (attack.damage + airBonus) * powerMultiplier;
       let blocked = b.guarding && (a.x - b.x) * b.facing > -10;
       let guardBreak = false;
       if (blocked) {
@@ -365,7 +415,8 @@
       }
       this._emit(guardBreak ? 'guardBreak' : blocked ? 'block' : 'hit', {
         fighter: a.id, target: b.id, kind, damage: Math.round(damage * 10) / 10,
-        x: (a.x + b.x) / 2, y: Math.max(a.y, b.y) + 95, combo: a.combo
+        x: (a.x + b.x) / 2, y: Math.max(a.y, b.y) + 95, combo: a.combo,
+        aerial: airborne, powerRating: a.powerRating
       });
     }
 
