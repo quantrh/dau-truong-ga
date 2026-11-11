@@ -675,22 +675,26 @@
       if(selectedMode==='online'&&net&&net.connected){
         const oldHold=networkHold;
         if(onlineRole==='host'){
-          networkHold=document.hidden||!remoteFocused||now-lastRemoteInput>2200;
-          if(networkHold){remoteInput=empty();clearRemoteActions();}
-          else{
-            if(game.state.phase!=='fight'||game.state.round!==observedRound){clearRemoteActions();observedRound=game.state.round;}
-            game.step(dt,[inputFor(0),remoteControls()]);effects(game.drainEvents());
-          }
+          const stallLimit=Math.max(6500,Math.min(15000,6500+(net.ping||0)*8));
+          networkHold=now-lastState>stallLimit;
+          if(now-lastRemoteInput>1400){remoteInput=empty();clearRemoteActions();}
+          if(game.state.phase!=='fight'||game.state.round!==observedRound){clearRemoteActions();observedRound=game.state.round;}
+          game.step(dt,[inputFor(0),remoteControls()]);effects(game.drainEvents());
           stateClock+=dt;
-          if(stateClock>=.05){stateClock=0;net.send({type:'state',seq:++stateSeq,state:game.snapshot(),paused:networkHold});}
+          if(stateClock>=.05){stateClock=0;net.send({type:'state',seq:++stateSeq,state:game.snapshot(),paused:false});}
         }else{
-          networkHold=remoteHostPaused||now-lastState>2200||document.hidden;
+          const stallLimit=Math.max(6500,Math.min(15000,6500+(net.ping||0)*8));
+          networkHold=remoteHostPaused||now-lastState>stallLimit;
           inputClock+=dt;
           if(inputClock>=1/30){inputClock=0;sendInput();}
         }
         if(oldHold!==networkHold)hudState='';
       }else if(selectedMode!=='online'){
-        game.step(dt,[inputFor(0),inputFor(1)]);effects(game.drainEvents());
+        const beforeX=game.state.fighters[0].x;
+        game.step(dt,[inputFor(0),inputFor(1)]);
+        const events=game.drainEvents();
+        if(selectedMode==='training')observeTraining(events,beforeX);
+        effects(events);
       }
     }
     uiClock+=dt;if(uiClock>.065){uiClock=0;updateHUD();}
