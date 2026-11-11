@@ -426,21 +426,30 @@
     const phaseIndex=Math.floor(((phase/(Math.PI*2))%1)*4)%4;
     const frame=reverse?(4-phaseIndex)%4:phaseIndex;
     let pose='idle', source=images.atlas, scale=.635;
+    const airborne=playing&&f.y>12;
+    let airAttack=null,airAttackPower=0;
     let lift=0,lunge=0,lean=(f.vx/310)*f.facing*.045;
     let squash=f.action==='guard'?.11:0;
     let bob=moving?Math.abs(Math.sin(phase*2))*3*moveBlend:Math.sin(time*2.4+index)*.8;
     if(f.action==='peck'){
-      const progress=Math.min(1,f.attackTimer/.43);
-      pose=progress>.15&&progress<.78?'peck':'idle';
-      lunge=Math.sin(progress*Math.PI)*16;
-      squash+=Math.sin(progress*Math.PI)*.035;
+      const progress=Math.min(1,f.attackTimer/.43),arc=Math.sin(progress*Math.PI);
+      pose=progress>.15&&progress<.86?'peck':'idle';
+      if(airborne){
+        airAttack='peck';airAttackPower=arc;
+        lunge=arc*34;lean-=arc*.22;squash-=arc*.035;lift+=arc*11;
+      }else{
+        lunge=arc*16;squash+=arc*.035;
+      }
     }else if(f.action==='kick'){
-      const progress=Math.min(1,f.attackTimer/.7);
-      pose=progress>.2&&progress<.8?'kick':'idle';
-      lift=Math.sin(progress*Math.PI)*37;
-      lean-=Math.sin(progress*Math.PI)*.065;
-      lunge=Math.sin(progress*Math.PI)*18;
-      if(progress<.2)squash+=Math.sin(progress/.2*Math.PI)*.09;
+      const progress=Math.min(1,f.attackTimer/.7),arc=Math.sin(progress*Math.PI);
+      pose=progress>.14&&progress<.88?'kick':'idle';
+      if(airborne){
+        airAttack='kick';airAttackPower=arc;
+        lift=arc*50;lean-=arc*.26;lunge=arc*34;squash-=arc*.06;
+      }else{
+        lift=arc*37;lean-=arc*.065;lunge=arc*18;
+        if(progress<.2)squash+=Math.sin(progress/.2*Math.PI)*.09;
+      }
     }else if(f.action==='jump'){
       pose='kick';lean=-Math.max(-.07,Math.min(.09,f.vy/650*.075));
       bob+=Math.sin(time*19)*1.6;
@@ -482,6 +491,10 @@
       for(let trail=2;trail>0;trail--){
         ctx.save();ctx.globalAlpha=.045*(3-trail);ctx.translate(-f.dashDirection*f.facing*trail*19,0);draw();ctx.restore();
       }
+    }
+    if(airAttack&&airAttackPower>.12&&!reduced){
+      ctx.save();ctx.globalAlpha=.12*airAttackPower;ctx.strokeStyle=airAttack==='kick'?'#fff0a8':'#f4d78e';ctx.lineWidth=5;
+      ctx.beginPath();ctx.arc(-18,-112,76,-.9,.55);ctx.stroke();ctx.restore();
     }
     if(f.hitFlash>0)ctx.filter='brightness('+(1+f.hitFlash*1.7)+')';
     else if(f.invulnTimer>0)ctx.filter='brightness(1.1)';
