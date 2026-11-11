@@ -30,7 +30,7 @@
       hurtTimer: 0, regenLock: 0, jumpCooldown: 0,
       jumpBuffer: 0, landTimer: 0, gaitPhase: 0, moveBlend: 0,
       dashTimer: 0, dashCooldown: 0, dashDirection: index ? 1 : -1, invulnTimer: 0,
-      combo: 0, comboTimer: 0, damageDone: 0
+      combo: 0, comboTimer: 0, damageDone: 0, powerRating: 100
     };
   }
 
@@ -42,7 +42,20 @@
       this._seed = ((options.seed || Date.now()) >>> 0) || 1;
       this._eventSeq = 0;
       this._events = [];
+      this._matchRules = { powerMode: 'balanced', powerRatings: [100, 100] };
+      this.setMatchRules(options.matchRules || {});
       this.reset(options.mode || 'bot');
+    }
+
+    setMatchRules(rules = {}) {
+      const mode = rules.powerMode === 'progression' ? 'progression' : 'balanced';
+      const ratings = Array.isArray(rules.powerRatings) ? rules.powerRatings : [100,100];
+      this._matchRules = { powerMode: mode, powerRatings: [0,1].map(i => clamp(Math.round(finite(ratings[i],100)),100,130)) };
+      if (this.state) {
+        this.state.matchRules = copy(this._matchRules);
+        this.state.fighters.forEach((f,i)=>{ f.powerRating = this._matchRules.powerMode === 'progression' ? this._matchRules.powerRatings[i] : 100; });
+      }
+      return copy(this._matchRules);
     }
 
     reset(mode = this.state ? this.state.mode : 'bot') {
@@ -54,8 +67,9 @@
         round: 1, roundTime: this.roundSeconds, roundSeconds: this.roundSeconds,
         wins: [0, 0], roundWinner: -1, matchWinner: -1,
         resultReason: '', fighters: [makeFighter(0), makeFighter(1)],
-        eventId: this._eventSeq, recentEvents: []
+        matchRules: copy(this._matchRules), eventId: this._eventSeq, recentEvents: []
       };
+      this.state.fighters.forEach((f,i)=>{ f.powerRating = this._matchRules.powerMode === 'progression' ? this._matchRules.powerRatings[i] : 100; });
       this._bots = [false, mode === 'bot'];
       this._previous = [emptyInput(), emptyInput()];
       this._botState = [this._newBot(), this._newBot()];
@@ -113,6 +127,10 @@
       safe.matchWinner = [-1, 0, 1].includes(safe.matchWinner) ? safe.matchWinner : -1;
       safe.mode = ['bot', 'local', 'online'].includes(safe.mode) ? safe.mode : 'online';
       safe.resultReason = ['knockout', 'timeout', 'draw', ''].includes(safe.resultReason) ? safe.resultReason : '';
+      const incomingRules = safe.matchRules && typeof safe.matchRules === 'object' ? safe.matchRules : {};
+      const powerMode = incomingRules.powerMode === 'progression' ? 'progression' : 'balanced';
+      const powerRatings = Array.isArray(incomingRules.powerRatings) ? incomingRules.powerRatings : [100,100];
+      safe.matchRules = { powerMode, powerRatings: [0,1].map(i=>clamp(Math.round(finite(powerRatings[i],100)),100,130)) };
       safe.eventId = Math.max(0, finite(safe.eventId));
       safe.recentEvents = Array.isArray(safe.recentEvents) ? safe.recentEvents.slice(-16) : [];
       for (let i = 0; i < 2; i++) {
@@ -139,8 +157,10 @@
         f.dashDirection = f.dashDirection < 0 ? -1 : 1;
         f.combo = clamp(Math.floor(finite(f.combo)), 0, 1000);
         f.damageDone = Math.max(0, finite(f.damageDone));
+        f.powerRating = safe.matchRules.powerMode === 'progression' ? safe.matchRules.powerRatings[i] : 100;
       }
       this.state = safe;
+      this._matchRules = copy(safe.matchRules);
       this.roundSeconds = safe.roundSeconds;
       this._eventSeq = Math.max(this._eventSeq, safe.eventId);
       return true;
@@ -189,6 +209,7 @@
           s.phase = 'countdown'; s.phaseTime = 2.5;
           s.roundWinner = -1; s.resultReason = '';
           s.fighters = [makeFighter(0), makeFighter(1)];
+          s.fighters.forEach((f,i)=>{ f.powerRating = s.matchRules.powerMode === 'progression' ? s.matchRules.powerRatings[i] : 100; });
           this._previous = [emptyInput(), emptyInput()];
           this._botState = [this._newBot(), this._newBot()];
           this._emit('newRound', { round: s.round });
@@ -336,7 +357,10 @@
     }
 
     _hit({ a, b, attack, kind }) {
-      let damage = attack.damage + (kind === 'kick' && a.y > 20 ? 3 : 0);
+      const airborne = a.y > 20;
+      const airBonus = airborne ? (kind === 'kick' ? 4 : 2) : 0;
+      const powerMultiplier = this.state.matchRules && this.state.matchRules.powerMode === 'progression' ? 1 + (clamp(finite(a.powerRating,100),100,130) - 100) / 200 : 1;
+      let damage = (attack.damage + airBonus) * powerMultiplier;
       let blocked = b.guarding && (a.x - b.x) * b.facing > -10;
       let guardBreak = false;
       if (blocked) {
@@ -365,7 +389,8 @@
       }
       this._emit(guardBreak ? 'guardBreak' : blocked ? 'block' : 'hit', {
         fighter: a.id, target: b.id, kind, damage: Math.round(damage * 10) / 10,
-        x: (a.x + b.x) / 2, y: Math.max(a.y, b.y) + 95, combo: a.combo
+        x: (a.x + b.x) / 2, y: Math.max(a.y, b.y) + 95, combo: a.combo,
+        aerial: airborne, powerRating: a.powerRating
       });
     }
 
