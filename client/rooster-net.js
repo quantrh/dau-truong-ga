@@ -36,7 +36,7 @@
       this.onData = options.onData || noop;
       this.onDisconnect = options.onDisconnect || noop;
       this._fetch = options.fetch || (root.fetch && root.fetch.bind(root));
-      const origin = options.baseUrl !== undefined ? options.baseUrl : root.ROOSTER_ONLINE_ORIGIN;
+      const origin = options.baseUrl !== undefined ? options.baseUrl : (root.ROOSTER_ONLINE_API || root.ROOSTER_ONLINE_ORIGIN);
       this.baseUrl = String(origin || (root.location && /^https?:$/.test(root.location.protocol) ? root.location.origin : '')).replace(/\/$/, '');
       this.role = null;
       this.room = '';
