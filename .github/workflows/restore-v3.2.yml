@@ -1,0 +1,40 @@
+name: Restore v3.2 verification
+
+on:
+  push:
+    branches: [restore-v3.2-supabase]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+      - run: npm run build
+      - name: Keep GitHub Pages index in sync
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          cp outputs/github-index.html index.html
+          if git diff --quiet -- index.html; then
+            echo "index.html already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Build GitHub Pages index for v3.2"
+          git push
