@@ -7,8 +7,8 @@
   const PHASES = ['countdown', 'fight', 'roundEnd', 'matchEnd'];
   const ACTIONS = ['idle', 'walk', 'jump', 'peck', 'kick', 'guard', 'dash', 'hurt', 'win'];
   const ATTACKS = {
-    peck: { start: 0.105, active: 0.105, total: 0.43, cost: 11, damage: 9, range: 155, height: 112, push: 165 },
-    kick: { start: 0.075, active: 0.15, total: 0.70, cost: 25, damage: 21, range: 205, height: 151, push: 315 }
+    peck: { start: 0.105, active: 0.105, total: 0.43, cost: 11, damage: 9, range: 148, height: 112, push: 215 },
+    kick: { start: 0.075, active: 0.15, total: 0.70, cost: 25, damage: 21, range: 184, height: 151, push: 430 }
   };
   const DASH = { duration: 0.18, cooldown: 0.8, cost: 18, speed: 660, invulnerable: 0.1 };
   const emptyInput = () => ({ left: false, right: false, jump: false, peck: false, kick: false, guard: false, dash: false });
@@ -369,7 +369,7 @@
     _separate() {
       const [a, b] = this.state.fighters;
       if (Math.abs(a.y - b.y) > 95) return;
-      const gap = 108, d = b.x - a.x;
+      const gap = 132, d = b.x - a.x;
       if (Math.abs(d) >= gap) return;
       const sign = d === 0 ? (a.facing === 1 ? 1 : -1) : Math.sign(d);
       const push = (gap - Math.abs(d)) * 0.5;
@@ -402,14 +402,21 @@
       }
       b.hp = Math.max(0, b.hp - damage);
       a.damageDone += damage;
-      b.hitFlash = blocked ? 0.075 : 0.18;
-      b.vx = a.facing * attack.push * (blocked ? 0.45 : 1);
+      b.hitFlash = blocked ? 0.075 : 0.22;
+      const contactPush = attack.push * (airborne ? (kind === 'kick' ? 1.14 : 1.08) : 1);
+      b.vx = a.facing * contactPush * (blocked ? 0.34 : 1);
       if (!blocked) {
-        b.hurtTimer = guardBreak ? 0.65 : kind === 'kick' ? 0.24 : 0.14;
+        b.hurtTimer = guardBreak ? 0.65 : kind === 'kick' ? 0.36 : 0.20;
         b.attackType = ''; b.attackTimer = 0; b.attackConnected = false;
         b.dashTimer = 0; b.invulnTimer = 0;
         this._setAction(b, 'hurt');
-        if (b.y > 0) b.vy = Math.max(b.vy, kind === 'kick' ? 110 : 40);
+        // Give impact an immediate spatial result so the contact never looks like two sprites passing through.
+        const shove = kind === 'kick' ? (airborne ? 30 : 24) : (airborne ? 16 : 12);
+        b.x = clamp(b.x + a.facing * shove, MIN_X, MAX_X);
+        a.x = clamp(a.x - a.facing * (kind === 'kick' ? 5 : 2), MIN_X, MAX_X);
+        if (kind === 'kick') b.vy = Math.max(b.vy, airborne ? 165 : 115);
+        else if (b.y > 0) b.vy = Math.max(b.vy, 65);
+        a.vx -= a.facing * (kind === 'kick' ? 72 : 24);
         a.combo = a.comboTimer > 0 ? a.combo + 1 : 1;
         a.comboTimer = 1.35;
       }

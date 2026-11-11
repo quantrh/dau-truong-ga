@@ -2,7 +2,7 @@ name: Restore v3.2 verification
 
 on:
   push:
-    branches: [restore-v3.2-supabase]
+    branches: [main, restore-v3.2-supabase, fix-v3.2.1-hit-sync]
   pull_request:
     branches: [main]
 

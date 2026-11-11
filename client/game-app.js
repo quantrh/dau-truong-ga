@@ -247,8 +247,8 @@
         const x=Number.isFinite(e.x)?e.x:640, y=580-(Number.isFinite(e.y)?e.y:100);
         particlesAt(x,y,e.type==='hit'?18:11,e.type==='block'?'block':'hit');
         sound(e.type==='block'?'block':'hit');
-        if (!reduced) shake=e.type==='hit'?(e.kind==='kick'?5:2.5):1.4;
-        floating.push({x,y:y-35,life:.75,text:e.type==='guardBreak'?'VỠ THẾ THỦ':e.type==='block'?'ĐỠ':Math.round(e.damage||0).toString(),color:e.type==='block'?'#e9f4d1':'#fff0bc'});
+        if (!reduced) shake=e.type==='hit'?(e.kind==='kick'?(e.aerial?8:6.5):(e.aerial?4:3.2)):1.4;
+        floating.push({x,y:y-35,life:.75,text:e.type==='guardBreak'?'VỠ THẾ THỦ':e.type==='block'?'ĐỠ':(e.aerial?'TRÚNG TRÊN KHÔNG · ':'')+Math.round(e.damage||0),color:e.type==='block'?'#e9f4d1':'#fff0bc'});
       } else if (e.type==='dash') {
         particlesAt(Number.isFinite(e.x)?e.x:640,575,17,'dust');
         tone(300,.13,.025,'sine',90);
@@ -394,7 +394,7 @@
     if(selectedMode==='online'&&net&&net.connected) {
       $('liveStatus').textContent='ONLINE · '+(net.ping===null?'ĐANG KẾT NỐI':net.ping+' MS');
     } else $('liveStatus').textContent=paused?'TẠM DỪNG':selectedMode==='training'?'TẬP MỘT MÌNH · THỂ LỰC VÔ HẠN':selectedMode==='local'?'2 NGƯỜI CÙNG MÁY':'ĐẤU VỚI MÁY';
-    if(selectedMode==='online'&&networkHold&&!resultShown){showCenter('TRẬN ĐẤU ĐANG CHỜ','Chờ một nhịp…',document.hidden?'Quay lại tab game để tiếp tục.':remoteHostPaused||!remoteFocused?'Bạn chơi đang tạm rời tab hoặc chờ kết nối.':'Đang chờ dữ liệu từ bạn chơi. Trận sẽ tự tiếp tục.');return;}
+    if(selectedMode==='online'&&networkHold&&!resultShown){showCenter('KẾT NỐI ĐANG CHẬM','Đợi tín hiệu đối thủ…',remoteHostPaused?'Chủ phòng đang tạm dừng đồng bộ.':'Chưa nhận được heartbeat mới từ máy đối thủ. Trận sẽ tự tiếp tục khi dữ liệu trở lại.');return;}
     if(paused) {showCenter('NGHỈ MỘT NHỊP','Tạm dừng','Nhấn P, Esc hoặc ▶ để tiếp tục');return;}
     if(selectedMode==='online'&&onlineRole==='guest'&&performance.now()-lastState>2000&&!resultShown) {
       showCenter('KẾT NỐI CHẬM','Đang chờ…','Chờ tín hiệu từ chủ phòng');return;
@@ -578,7 +578,11 @@
     }else if(f.action==='dash'){
       pose='idle';squash=.13;lean=f.dashDirection*f.facing*.16;bob=0;
     }else if(f.action==='hurt'){
-      lean=-.11;squash=-.025;bob=-2;
+      const impact=Math.min(1,Math.max(.18,f.hurtTimer/.36));
+      const recoil=Math.min(1,Math.abs(f.vx)/430);
+      lean=-.14-.17*impact;squash=-.035-.05*impact;bob=-3-5*impact;
+      lunge-=Math.min(24,8+recoil*18);
+      lift+=Math.max(0,Math.min(16,f.y*.08));
     }else if(f.action==='win')bob=Math.abs(Math.sin(time*4))*7;
     if(f.landTimer>0)squash+=.1*Math.sin(Math.min(1,f.landTimer/.16)*Math.PI);
     const ease=1-Math.exp(-24*dt);
@@ -685,7 +689,8 @@
         const oldHold=networkHold;
         if(onlineRole==='host'){
           const stallLimit=Math.max(6500,Math.min(15000,6500+(net.ping||0)*8));
-          networkHold=now-lastState>stallLimit;
+          // Host receives guest heartbeats as input packets. lastState belongs to the guest side only.
+          networkHold=now-lastRemoteInput>stallLimit;
           if(now-lastRemoteInput>1400){remoteInput=empty();clearRemoteActions();}
           if(game.state.phase!=='fight'||game.state.round!==observedRound){clearRemoteActions();observedRound=game.state.round;}
           game.step(dt,[inputFor(0),remoteControls()]);effects(game.drainEvents());
