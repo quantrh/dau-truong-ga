@@ -26,13 +26,13 @@ export async function makeHTML({ standalone = false, external = false } = {}) {
       const file = files[route.split('/').pop()];
       return `data:${file.mime};base64,${file.base64}`;
     }
-    return external ? SITE_ORIGIN + route : route;
+    return external ? PUBLIC_GAME_URL + route.replace(/^\\//, '') : route;
   };
   for (const key of ['atlas', 'background', 'walkAtlas']) map[key] = assetURL(map[key]);
   shell = shell.replace(/\/assets\/[a-zA-Z0-9_.-]+/g, assetURL);
   // Same-origin on the hosted site/preview; explicit production origin only
   // for the downloadable HTML and GitHub Pages frontend.
-  const config = `window.ROOSTER_ONLINE_API=${JSON.stringify(SUPABASE_ROOM_API)};window.ROOSTER_PUBLIC_GAME_URL=${JSON.stringify(PUBLIC_GAME_URL)};window.ROOSTER_ONLINE_ORIGIN=${JSON.stringify(standalone || external ? SITE_ORIGIN : '')};`;
+  const config = `window.ROOSTER_ONLINE_API=${JSON.stringify(SUPABASE_ROOM_API)};window.ROOSTER_PUBLIC_GAME_URL=${JSON.stringify(PUBLIC_GAME_URL)};window.ROOSTER_ONLINE_ORIGIN='';`;
   const parts = [`<script>${config}window.ROOSTER_ASSETS=${JSON.stringify(map).replace(/<\//g, '<\\/')};</script>`];
   for (const name of scripts) {
     const script = await readFile(path.join(ROOT, 'client', name), 'utf8');
