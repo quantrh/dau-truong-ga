@@ -292,6 +292,7 @@
     onlineRole=null;remoteInput=empty();lastRemoteInput=0;roomRoster=null;networkHold=false;remoteFocused=true;remoteHostPaused=false;clearRemoteActions();
     $('roomCard').hidden=true;$('leaveBtn').hidden=true;$('roomRoster').hidden=true;$('playerName').disabled=false;
     $('createBtn').disabled=false;$('joinBtn').disabled=false;$('roomInput').disabled=false;
+    if($('powerMode'))$('powerMode').disabled=false;
     $('networkStatus').textContent='Tạo phòng hoặc nhập mã để kết nối.';
     $('networkStatus').classList.remove('error');
   }
@@ -805,7 +806,7 @@
     document.fonts.load('700 16px "Noto Sans Game"', 'Đánh đúng lúc, thắng đúng nhịp'),
     document.fonts.load('italic 400 16px "Noto Sans Game"', 'Bản lĩnh trong từng nhịp cánh')
   ]).then(()=>{
-    loaded=true;$('loading').hidden=true;$('startBtn').disabled=false;$('startBtn').textContent='BẮT ĐẦU TRẬN →';
+    loaded=true;$('loading').hidden=true;$('startBtn').disabled=false;$('startBtn').textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →';
     setRoles();updateHUD();
   }).catch(()=>{
     $('loading').textContent='Không đọc được hình ảnh hoặc font chữ. Hãy tải lại file HTML đầy đủ rồi mở lại.';
