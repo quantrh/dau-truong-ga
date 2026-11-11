@@ -123,7 +123,7 @@
     const host=room.host&&Number(room.host.powerRating)||100;
     const guest=room.guest&&Number(room.guest.powerRating)||100;
     const mode=room.matchMode==='progression'?'progression':'balanced';
-    if($('powerMode')){$('powerMode').value=mode;$('powerMode').disabled=onlineRole==='guest'||room.status==='playing';}
+    if($('powerMode')){$('powerMode').value=mode;$('powerMode').disabled=true;}
     game.setMatchRules({powerMode:mode,powerRatings:[host,guest]});
     updatePowerModeHint();
   }
@@ -367,6 +367,7 @@
     $('resultTitle').textContent=names[winner]+' chiến thắng';
     $('resultDetail').textContent='Tỉ số '+s.wins[0]+' – '+s.wins[1]+'. '+(winner===self?'Nhịp ra đòn rất tốt. Tiếp tục so tài?':'Giữ thể lực, chọn thời điểm và thử lại.');
     $('resultOverlay').hidden=false;$('centerMessage').hidden=true;$('pauseBtn').hidden=true;
+    if(selectedMode==='online')setTimeout(()=>{RoosterProfile.refresh().then(()=>{profileState=RoosterProfile.state;updateProfileUI();}).catch(()=>{});},1800);
   }
   function updateHUD() {
     const s=game.state;
@@ -727,6 +728,13 @@
     if(!document.hidden)lastLogic=performance.now();
   });
   document.querySelectorAll('.mode-card').forEach(b=>b.addEventListener('click',()=>selectMode(b.dataset.mode)));
+  $('powerMode').addEventListener('change',()=>{applyLocalPowerRules(selectedMode);updatePowerModeHint();});
+  $('saveRoosterName').addEventListener('click',async()=>{
+    try{await ensureProfile();const r=await RoosterProfile.rename($('roosterName').value);profileState=RoosterProfile.state;updateProfileUI();toast('Đã lưu tên chiến kê: '+r.name+'.');}
+    catch(error){toast('Không lưu được tên chiến kê: '+error.message);}
+  });
+  $('resetTrainingBtn').addEventListener('click',()=>{if(selectedMode==='training')beginGame('training');});
+  $('exitTrainingBtn').addEventListener('click',()=>selectMode('bot'));
   $('startBtn').addEventListener('click',()=>beginGame(selectedMode));
   $('createBtn').addEventListener('click',hostRoom);
   $('joinForm').addEventListener('submit',joinRoom);
@@ -803,11 +811,13 @@
     $('loading').textContent='Không đọc được hình ảnh hoặc font chữ. Hãy tải lại file HTML đầy đủ rồi mở lại.';
   });
   try{$('playerName').value=localStorage.getItem('rooster-player-name')||'';}catch(_){}
-  setRoles();selectMode('online');
   const invitedCode=new URLSearchParams(location.search).get('room');
+  selectMode(invitedCode&&RoosterNet.validCode(invitedCode)?'online':'training');
   if(invitedCode&&RoosterNet.validCode(invitedCode)){
     $('roomInput').value=invitedCode.toUpperCase();
     $('networkStatus').textContent='Bạn được mời vào phòng '+invitedCode.toUpperCase()+'. Nhập tên rồi bấm Vào.';
   }
+  ensureProfile().then(()=>{profileState=RoosterProfile.state;updateProfileUI();setRoles();}).catch(()=>{});
+  updateTrainingUI();setRoles();
   setInterval(tick,1000/60);requestAnimationFrame(render);
 })();
