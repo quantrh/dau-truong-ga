@@ -134,7 +134,8 @@
   function updateTrainingUI(){
     if(!$('trainingProgress'))return;
     $('trainingProgress').textContent=trainingDone.size+' / 7 động tác';
-    document.querySelectorAll('[data-training]').forEach(el=>el.classList.toggle('done',trainingDone.has(el.dataset.training)));
+    const labels={left:'Sang trái',right:'Sang phải',jump:'Nhảy',peck:'Mổ',kick:'Đá',guard:'Giữ thế thủ',dash:'Lướt né'};
+    document.querySelectorAll('[data-training]').forEach(el=>{const action=el.dataset.training;el.classList.toggle('done',trainingDone.has(action));el.textContent=(trainingDone.has(action)?'✓ ':'')+labels[action]+' · '+controls.keyLabel(action,0);});
     if(trainingDone.size===7)$('trainingProgress').textContent='7 / 7 động tác · Đã quen phím, tiếp tục tập tự do!';
   }
   function observeTraining(events,beforeX){
@@ -267,12 +268,14 @@
     $('rematchBtn').textContent='Đấu lại ↻';
   }
   function setRoles() {
-    const online=selectedMode==='online';
-    $('p0Role').textContent=online&&roomRoster?roomRoster.host.name+(onlineRole==='host'?' · BẠN':''):online?(onlineRole==='guest'?'ĐỐI THỦ':'BẠN'):'BẠN';
-    $('p1Role').textContent=online&&roomRoster&&roomRoster.guest?roomRoster.guest.name+(onlineRole==='guest'?' · BẠN':''):online?(onlineRole==='guest'?'BẠN':'ĐỐI THỦ'):selectedMode==='local'?'NGƯỜI 2':'MÁY';
-    $('modeLabel').textContent=online?'ĐẤU QUA MẠNG':selectedMode==='local'?'HAI NGƯỜI':'LUYỆN TẬP';
+    const online=selectedMode==='online',training=selectedMode==='training';
+    $('p0Role').textContent=online&&roomRoster?(roomRoster.host.roosterName||roomRoster.host.name)+(onlineRole==='host'?' · BẠN':''):online?(onlineRole==='guest'?'ĐỐI THỦ':'BẠN'):'BẠN';
+    $('p1Role').textContent=online&&roomRoster&&roomRoster.guest?(roomRoster.guest.roosterName||roomRoster.guest.name)+(onlineRole==='guest'?' · BẠN':''):online?(onlineRole==='guest'?'BẠN':'ĐỐI THỦ'):selectedMode==='local'?'NGƯỜI 2':'MÁY';
+    $('modeLabel').textContent=training?'TẬP MỘT MÌNH':online?'ĐẤU QUA MẠNG':selectedMode==='local'?'HAI NGƯỜI':'ĐẤU VỚI MÁY';
     $('p2Controls').hidden=selectedMode!=='local';
-    $('startCaption').textContent=selectedMode==='local'?'Người 1: Gà Điều · Người 2: Gà Trắng.':'Bạn điều khiển Gà Điều ở bên trái.';
+    const secondHud=$('p1Role').closest('.fighter-hud');if(secondHud)secondHud.style.visibility=training?'hidden':'';
+    canvas.setAttribute('aria-label',training?'Một chú gà trong sân tập; dùng bàn phím để thử từng động tác':'Hai chú gà thi đấu trong đấu trường');
+    $('startCaption').textContent=training?'Tập tự do, không giới hạn thời gian.':selectedMode==='local'?'Người 1: Gà Điều · Người 2: Gà Trắng.':'Bạn điều khiển Gà Điều ở bên trái.';
     updateControlLabels();
   }
   function releaseKeys() {
