@@ -121,18 +121,18 @@
       }
     }
 
-    async create(name) { return this._enter('host', '', name); }
-    async join(code, name) {
+    async create(name, player) { return this._enter('host', '', name, player); }
+    async join(code, name, player) {
       code = cleanCode(code);
       if (!validCode(code)) {
         const error = new Error('Nhập đúng mã phòng 6 ký tự do bạn của bạn gửi.');
         this._emit('error', error.message);
         throw error;
       }
-      return this._enter('guest', code, name);
+      return this._enter('guest', code, name, player);
     }
 
-    async _enter(role, code, name) {
+    async _enter(role, code, name, player) {
       this.close(true);
       this.role = role;
       this.room = code;
@@ -148,7 +148,8 @@
       this._statusSignature = '';
       const generation = this._generation;
       const path = role === 'host' ? '/api/rooms' : '/api/rooms/' + code + '/join';
-      const body = { name: cleanName(name), sessionToken: this._token };
+      const safePlayer = player && typeof player === 'object' && validTree(player) ? clone(player) : null;
+      const body = { name: cleanName(name), sessionToken: this._token, player: safePlayer };
       this._emit('connecting', role === 'host' ? 'Đang tạo phòng online…' : 'Đang vào phòng ' + code + '…');
       try {
         let result;
