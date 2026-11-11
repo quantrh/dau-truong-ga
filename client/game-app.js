@@ -373,9 +373,14 @@
       $('hp'+i).parentElement.setAttribute('aria-label','Sức chiến đấu '+names[i]+': '+Math.ceil(f.hp));
       Array.from($('wins'+i).children).forEach((el,j)=>el.classList.toggle('won',j<s.wins[i]));
     });
-    $('clock').textContent=String(Math.max(0,Math.ceil(s.roundTime))).padStart(2,'0');
-    $('clock').style.color=s.roundTime<=10?'#ffca8e':'';
-    $('roundLabel').textContent='HIỆP '+String(s.round).padStart(2,'0');
+    if(selectedMode==='training'){
+      $('clock').textContent='∞';$('clock').style.color='';$('clock').setAttribute('aria-label','Không giới hạn thời gian');
+      $('roundLabel').textContent='TẬP TỰ DO';
+    }else{
+      $('clock').textContent=String(Math.max(0,Math.ceil(s.roundTime))).padStart(2,'0');
+      $('clock').style.color=s.roundTime<=10?'#ffca8e':'';
+      $('roundLabel').textContent='HIỆP '+String(s.round).padStart(2,'0');
+    }
     $('arena').dataset.phase=playing?s.phase:'lobby';
     if(!playing) {
       if(!disconnected)$('liveStatus').textContent=net?(roomRoster&&roomRoster.guest?'2 NGƯỜI · CHỜ BẮT ĐẦU':'CHỜ BẠN VÀO PHÒNG'):'SẴN SÀNG';
@@ -383,7 +388,7 @@
     }
     if(selectedMode==='online'&&net&&net.connected) {
       $('liveStatus').textContent='ONLINE · '+(net.ping===null?'ĐANG KẾT NỐI':net.ping+' MS');
-    } else $('liveStatus').textContent=paused?'TẠM DỪNG':selectedMode==='local'?'2 NGƯỜI CÙNG MÁY':'ĐẤU VỚI MÁY';
+    } else $('liveStatus').textContent=paused?'TẠM DỪNG':selectedMode==='training'?'TẬP MỘT MÌNH · THỂ LỰC VÔ HẠN':selectedMode==='local'?'2 NGƯỜI CÙNG MÁY':'ĐẤU VỚI MÁY';
     if(selectedMode==='online'&&networkHold&&!resultShown){showCenter('TRẬN ĐẤU ĐANG CHỜ','Chờ một nhịp…',document.hidden?'Quay lại tab game để tiếp tục.':remoteHostPaused||!remoteFocused?'Bạn chơi đang tạm rời tab hoặc chờ kết nối.':'Đang chờ dữ liệu từ bạn chơi. Trận sẽ tự tiếp tục.');return;}
     if(paused) {showCenter('NGHỈ MỘT NHỊP','Tạm dừng','Nhấn P, Esc hoặc ▶ để tiếp tục');return;}
     if(selectedMode==='online'&&onlineRole==='guest'&&performance.now()-lastState>2000&&!resultShown) {
