@@ -2,7 +2,11 @@
 
 Trò chơi đối kháng vui dành cho hai người, dùng bàn phím, với hình ảnh gà chân thực và chữ tiếng Việt được nhúng đầy đủ.
 
-**Chơi ngay:** https://dau-truong-ga-quan.bidv-it-grou-8424.chatgpt.site
+**Chơi ngay:** https://quantrh.github.io/dau-truong-ga/
+
+## Hạ tầng online
+
+Bản GitHub Pages dùng Supabase Edge Function `rooster-rooms` và bảng `game_rooms` để tạo/join/sync phòng. Ảnh và font được phục vụ trực tiếp từ GitHub Pages; không phụ thuộc GPT Site.
 
 ## Mời bạn chơi qua Internet
 
