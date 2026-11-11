@@ -68,7 +68,7 @@
     const next=clean(name);
     if(!next)throw new Error('Tên chiến kê không được để trống.');
     if(!state.rooster)await init(next);
-    const result=await state.client.from('game_roosters').update({name:next,updated_at:new Date().toISOString()}).eq('id',state.rooster.id);
+    const result=await state.client.from('game_roosters').update({name:next}).eq('id',state.rooster.id);
     if(result.error)throw result.error;
     await refresh();
     return state.rooster;
