@@ -4,7 +4,7 @@ import path from 'node:path';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const SITE_ORIGIN = 'https://dau-truong-ga-quan.bidv-it-grou-8424.chatgpt.site';
-const scripts = ['peerjs.min.js', 'game-engine.js', 'rooster-net.js', 'controls.js', 'game-app.js'];
+const scripts = ['peerjs.min.js', 'game-engine.js', 'rooster-net.js', 'controls.js', 'progression.js', 'game-app.js'];
 const mimeFor = name => name.endsWith('.woff') ? 'font/woff' : name.endsWith('.jpg') ? 'image/jpeg' : 'image/png';
 
 export async function embeddedAssets() {
