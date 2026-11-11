@@ -11,6 +11,9 @@ const app = await readFile(path.join(ROOT, 'client/game-app.js'), 'utf8');
 for (const match of app.matchAll(/\$\('([^']+)'\)/g)) assert.ok(ids.includes(match[1]), 'Missing DOM element: ' + match[1]);
 let count = 0;
 for (const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) { new vm.Script(script[1]); count++; }
-assert.equal(count, 6);
+assert.equal(count, 8);
 assert.ok(html.includes('Tôi đã sẵn sàng'));
+assert.ok(html.includes('Tập một mình'));
+assert.ok(html.includes('ROOSTER_SUPABASE_URL'));
+assert.ok(html.includes('Sức mạnh tích lũy'));
 console.log(JSON.stringify({ checked: true, scripts: count, uniqueDOMIds: ids.length }));
