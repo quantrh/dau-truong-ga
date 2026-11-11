@@ -54,8 +54,8 @@
     return value || 'Người chơi';
   }
   function shareURL(){
-    const origin=window.ROOSTER_ONLINE_ORIGIN||location.origin;
-    const u=new URL(origin);u.searchParams.set('room',net?net.room:$('roomCode').textContent);return u.toString();
+    const base=window.ROOSTER_PUBLIC_GAME_URL||(location.protocol==='http:'||location.protocol==='https:'?location.href:'https://quantrh.github.io/dau-truong-ga/');
+    const u=new URL(base);u.search='';u.hash='';u.searchParams.set('room',net?net.room:$('roomCode').textContent);return u.toString();
   }
   let hudState = '';
   const controls = new RoosterControls({
