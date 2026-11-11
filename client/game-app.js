@@ -423,12 +423,13 @@
   }
   function renderRoom(room){
     roomRoster=room;onlineRole=net?net.role:onlineRole;
+    applyRoomPowerRules(room);
     document.querySelector('.lobby').classList.add('in-room');$('lobbyTitle').textContent='PHÒNG CHƠI ONLINE';
     const self=onlineRole==='guest'?room.guest:room.host;
     $('roomRoster').hidden=false;$('roomCard').hidden=false;
     $('roomCode').textContent=room.code;$('roomCount').textContent=room.guest?'2 / 2':'1 / 2';
-    $('hostName').textContent=room.host.name+(onlineRole==='host'?' (bạn)':'');
-    $('guestName').textContent=room.guest?room.guest.name+(onlineRole==='guest'?' (bạn)':''):'Đang chờ bạn…';
+    $('hostName').textContent=(room.host.roosterName||room.host.name)+' · P'+(room.host.powerRating||100)+(onlineRole==='host'?' (bạn)':'');
+    $('guestName').textContent=room.guest?(room.guest.roosterName||room.guest.name)+' · P'+(room.guest.powerRating||100)+(onlineRole==='guest'?' (bạn)':''):'Đang chờ bạn…';
     for(const role of ['host','guest']){
       const player=room[role],chip=$(role+'Ready');
       chip.textContent=!player?'—':!player.online?'Kết nối…':room.status==='playing'?'Trong trận':player.ready?'Sẵn sàng':'Chưa sẵn sàng';
@@ -463,6 +464,7 @@
       onConnect(info){
         if(epoch!==netEpoch)return;
         onlineRole=info.role;lastState=performance.now();
+        if(roomRoster)applyRoomPowerRules(roomRoster);
         beginGame('online');
         if(info.role==='host')net.send({type:'start',state:game.snapshot(),seq:++stateSeq,paused:false});
         else showCenter('ĐÃ KẾT NỐI','Sẵn sàng','Đang nhận trận đấu từ chủ phòng');
@@ -498,8 +500,9 @@
   async function hostRoom(){
     if(!loaded){toast('Chờ hình ảnh tải xong rồi tạo phòng.');return;}
     playing=false;disconnected=false;resetVisuals();releaseKeys();$('splash').hidden=false;$('sceneLabel').hidden=false;
+    const identity=await profileIdentity();
     const current=createNetwork();
-    try{await current.create(playerName());}
+    try{await current.create(playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId,matchMode:currentPowerMode()});}
     catch(error){if(current===net){$('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');}}
   }
   async function joinRoom(event){
@@ -508,8 +511,9 @@
     const code=$('roomInput').value.trim().toUpperCase();
     if(!RoosterNet.validCode(code)){toast('Nhập đúng mã phòng 6 ký tự.');return;}
     playing=false;disconnected=false;resetVisuals();releaseKeys();$('splash').hidden=false;$('sceneLabel').hidden=false;
+    const identity=await profileIdentity();
     const current=createNetwork();
-    try{await current.join(code,playerName());}
+    try{await current.join(code,playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId});}
     catch(error){if(current===net){$('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');}}
   }
   function startRematch(){
