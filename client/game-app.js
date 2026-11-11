@@ -2,7 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const canvas = $('gameCanvas'), ctx = canvas.getContext('2d', { alpha: false });
-  const game = new RoosterGame({ mode: 'bot' });
+  const game = new RoosterGame({ mode: 'training' });
   const names = ['Gà Điều', 'Gà Trắng'];
   const keys = new Set();
   const empty = () => ({left:false,right:false,jump:false,peck:false,kick:false,guard:false,dash:false});
@@ -10,7 +10,7 @@
   const images = { atlas: new Image(), background: new Image(), walk: new Image() };
   const sprites = window.ROOSTER_ASSETS.sprites;
   const walkSprites = window.ROOSTER_ASSETS.walkSprites;
-  let loaded = false, selectedMode = 'bot', playing = false, paused = false;
+  let loaded = false, selectedMode = 'training', playing = false, paused = false;
   let net = null, netEpoch = 0, onlineRole = null, disconnected = false;
   let remoteInput = empty(), lastRemoteInput = 0, lastState = 0;
   let inputSeq = 0, stateSeq = 0, lastInputSeq = -1, lastStateSeq = -1;
@@ -26,6 +26,9 @@
   let localActions = freshActions(), remoteActions = freshActions(), remotePending = freshActions();
   let remoteRelease = {jump:false,dash:false};
   let observedRound = 1;
+  const trainingSteps=['left','right','jump','peck','kick','guard','dash'];
+  let trainingDone=new Set(),trainingLastX=640;
+  let profileState=null,profileInitPromise=null;
   function clearRemoteActions(){remotePending=freshActions();remoteRelease={jump:false,dash:false};}
   function receiveActions(raw){
     if(!raw||typeof raw!=='object')return;
@@ -71,6 +74,97 @@
     onChange(){releaseKeys();updateControlLabels();}
   });
   const ambient = Array.from({length:28}, (_,i) => ({x:(i*173+97)%1280,y:120+(i*67)%500,r:.6+(i%3)*.5,speed:4+(i%5)}));
+
+  function profileRooster(){return profileState&&profileState.rooster?profileState.rooster:null;}
+  function updateProfileUI(){
+    const r=profileRooster();
+    if(!$('profileState'))return;
+    $('profileState').textContent=profileState&&profileState.ready?'Đã lưu':'Chưa kết nối';
+    $('profileState').style.color=profileState&&profileState.ready?'#bfe49e':'#d5a879';
+    if(r){
+      if(document.activeElement!==$('roosterName'))$('roosterName').value=r.name;
+      $('grainCount').textContent=String(r.grain);
+      $('grasshopperCount').textContent=String(r.grasshopper);
+      $('henCount').textContent=String(r.hen);
+      $('powerValue').textContent=String(r.powerRating);
+    }
+    updatePowerModeHint();
+  }
+  async function ensureProfile(){
+    if(profileState&&profileState.ready)return profileState;
+    if(profileInitPromise)return profileInitPromise;
+    profileInitPromise=RoosterProfile.init(playerName()).then(state=>{
+      profileState=state;updateProfileUI();
+      if(!state.ready&&state.error)toast('Supabase: '+state.error);
+      return state;
+    }).finally(()=>{profileInitPromise=null;});
+    return profileInitPromise;
+  }
+  async function profileIdentity(){
+    const state=await ensureProfile();
+    if(!state||!state.ready)return {accessToken:'',roosterId:'',roosterName:playerName()+' · Chiến kê',powerRating:100};
+    return RoosterProfile.identity();
+  }
+  function currentPowerMode(){return $('powerMode')&&$('powerMode').value==='progression'?'progression':'balanced';}
+  function updatePowerModeHint(){
+    if(!$('powerModeHint'))return;
+    const p=profileRooster()?profileRooster().powerRating:100;
+    $('powerModeHint').textContent=currentPowerMode()==='progression'
+      ?'Sức mạnh tích lũy: chiến kê của bạn dùng Power '+p+' (tối đa 130).'
+      :'Cân bằng: cả hai chiến kê vào trận với Power 100.';
+  }
+  function applyLocalPowerRules(mode){
+    if(mode==='training'){game.setMatchRules({powerMode:'balanced',powerRatings:[100,100]});return;}
+    const power=profileRooster()?profileRooster().powerRating:100;
+    game.setMatchRules({powerMode:currentPowerMode(),powerRatings:[power,100]});
+  }
+  function applyRoomPowerRules(room){
+    if(!room)return;
+    const host=room.host&&Number(room.host.powerRating)||100;
+    const guest=room.guest&&Number(room.guest.powerRating)||100;
+    const mode=room.matchMode==='progression'?'progression':'balanced';
+    if($('powerMode')){$('powerMode').value=mode;$('powerMode').disabled=onlineRole==='guest'||room.status==='playing';}
+    game.setMatchRules({powerMode:mode,powerRatings:[host,guest]});
+    updatePowerModeHint();
+  }
+  function resetTrainingProgress(){
+    trainingDone=new Set();trainingLastX=game.state.fighters[0].x;
+    updateTrainingUI();
+  }
+  function updateTrainingUI(){
+    if(!$('trainingProgress'))return;
+    $('trainingProgress').textContent=trainingDone.size+' / 7 động tác';
+    document.querySelectorAll('[data-training]').forEach(el=>el.classList.toggle('done',trainingDone.has(el.dataset.training)));
+    if(trainingDone.size===7)$('trainingProgress').textContent='7 / 7 động tác · Đã quen phím, tiếp tục tập tự do!';
+  }
+  function observeTraining(events,beforeX){
+    if(selectedMode!=='training'||!playing)return;
+    const f=game.state.fighters[0];
+    if(f.x<beforeX-.5)trainingDone.add('left');
+    if(f.x>beforeX+.5)trainingDone.add('right');
+    if(f.guarding)trainingDone.add('guard');
+    for(const event of events){
+      if(event.fighter!==0)continue;
+      if(event.type==='jump')trainingDone.add('jump');
+      if(event.type==='dash')trainingDone.add('dash');
+      if(event.type==='attack'&&event.kind==='peck')trainingDone.add('peck');
+      if(event.type==='attack'&&event.kind==='kick')trainingDone.add('kick');
+    }
+    updateTrainingUI();
+  }
+  function fighterDisplayName(index){
+    if(selectedMode==='online'&&roomRoster){
+      const p=index===0?roomRoster.host:roomRoster.guest;
+      return p?(p.roosterName||p.name):(index?'Gà Trắng':'Gà Điều');
+    }
+    if(index===0&&profileRooster())return profileRooster().name;
+    return names[index];
+  }
+  function isSelfFighter(index){
+    if(selectedMode==='training'||selectedMode==='bot')return index===0;
+    if(selectedMode==='online')return onlineRole==='guest'?index===1:index===0;
+    return false;
+  }
 
   function toast(text) {
     $('toast').textContent = text;
