@@ -9,8 +9,8 @@ test('mobile gamepad is rendered after the arena, not over the canvas',async()=>
   const gamepad=shell.indexOf('id="mobileGamepad"');
   assert.ok(arena>=0&&gamepad>arena&&gamepad<arenaClose);
   const mobileCss=shell.slice(shell.indexOf('@media (pointer:coarse)'),shell.indexOf('.p2-controls'));
-  assert.ok(mobileCss.includes('.mobile-gamepad:not([hidden]){position:relative'));
-  assert.ok(!mobileCss.includes('.mobile-gamepad:not([hidden]){position:absolute'));
+  assert.ok(mobileCss.includes('.mobile-gamepad{position:relative'));
+  assert.ok(!mobileCss.includes('.mobile-gamepad{position:absolute'));
 });
 
 test('profile and power fields are collapsed into a settings menu',async()=>{
