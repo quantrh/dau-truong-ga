@@ -412,7 +412,7 @@
     $('networkStatus').classList.remove('error');
   }
   function lobby() {
-    releaseKeys();closeNet();playing=false;paused=false;disconnected=false;
+    releaseKeys();closeNet();playing=false;paused=false;disconnected=false;document.body.classList.remove('combat-active');
     applyLocalPowerRules(selectedMode);game.reset(selectedMode);resetVisuals();setRoles();
     $('splash').hidden=false;$('sceneLabel').hidden=false;$('centerMessage').hidden=true;
     $('pauseBtn').hidden=true;if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;
@@ -480,7 +480,7 @@
   }
   function beginGame(mode) {
     if(!loaded)return;
-    playing=true;paused=false;disconnected=false;keys.clear();
+    playing=true;paused=false;disconnected=false;keys.clear();document.body.classList.add('combat-active');
     if(mode!=='online')applyLocalPowerRules(mode);
     else if(roomRoster)applyRoomPowerRules(roomRoster);
     game.reset(mode);resetVisuals();localActions=freshActions();remoteActions=freshActions();clearRemoteActions();networkHold=false;remoteHostPaused=false;remoteFocused=true;observedRound=1;
@@ -519,7 +519,7 @@
     $('resultKicker').textContent=selectedMode==='local'?'NHÀ VÔ ĐỊCH SÂN ĐẤU':winner===self?'BẠN ĐÃ CHIẾN THẮNG':'TRẬN ĐẤU KHÉP LẠI';
     $('resultTitle').textContent=names[winner]+' chiến thắng';
     $('resultDetail').textContent='Tỉ số '+s.wins[0]+' – '+s.wins[1]+'. '+(winner===self?'Nhịp ra đòn rất tốt. Tiếp tục so tài?':'Giữ thể lực, chọn thời điểm và thử lại.');
-    $('resultOverlay').hidden=false;$('centerMessage').hidden=true;$('pauseBtn').hidden=true;if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;syncMobileQuickAction();
+    $('resultOverlay').hidden=false;$('centerMessage').hidden=true;$('pauseBtn').hidden=true;if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;document.body.classList.remove('combat-active');syncMobileQuickAction();
     if(selectedMode==='online')setTimeout(()=>{RoosterProfile.refresh().then(()=>{profileState=RoosterProfile.state;updateProfileUI();}).catch(()=>{});},1800);
   }
   function updateHUD() {
@@ -569,7 +569,7 @@
   }
   function markDisconnected(message) {
     if(disconnected)return;
-    disconnected=true;playing=false;releaseKeys();if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;syncMobileQuickAction();
+    disconnected=true;playing=false;releaseKeys();if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;document.body.classList.remove('combat-active');syncMobileQuickAction();
     $('roomRoster').hidden=true;$('roomCard').hidden=true;$('roomActions').hidden=true;$('leaveBtn').hidden=false;
     $('centerMessage').hidden=true;$('splash').hidden=true;$('pauseBtn').hidden=true;
     $('resultKicker').textContent='KẾT NỐI ĐÃ DỪNG';
