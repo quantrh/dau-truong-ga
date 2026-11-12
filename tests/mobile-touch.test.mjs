@@ -24,6 +24,6 @@ test('touch controls support multitouch held state and tap action counters',asyn
 
 test('releasing controls clears touch state and sends neutral input',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
-  assert.ok(app.includes('keys.clear();keyRepeatGrace.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();'));
+  assert.ok(app.includes('keys.clear();keyRepeatGrace.clear();directionTapBuffer.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();'));
   assert.ok(app.includes("document.querySelectorAll('.touch-key.pressed')"));
 });
