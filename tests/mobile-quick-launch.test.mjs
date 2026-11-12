@@ -45,3 +45,13 @@ test('online mode auto-creates a room and exposes native sharing',async()=>{
   assert.ok(shell.includes('id="inviteLink"'));
   assert.ok(shell.includes('Chia sẻ lời mời →'));
 });
+
+
+test('computer mode uses deliberately easier AI',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  const engine=await readFile(new URL('../client/game-engine.js',import.meta.url),'utf8');
+  assert.ok(app.includes("game.setDifficulty(mode==='bot'?'easy':'normal')"));
+  assert.ok(engine.includes("easy ? 0.34 : hard ? 0.085 : 0.13"));
+  assert.ok(engine.includes("const guardChance = easy ? 0.10 : hard ? 0.83 : 0.58"));
+  assert.ok(engine.includes("roll < (easy ? 0.18 : hard ? 0.6 : 0.46)"));
+});
