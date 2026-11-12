@@ -5,6 +5,7 @@
   const game = new RoosterGame({ mode: 'training' });
   const names = ['Gà Điều', 'Gà Trắng'];
   const keys = new Set();
+  const touchHeld = new Set(), touchPointers = new Map(), touchCounts = new Map();
   const empty = () => ({left:false,right:false,jump:false,peck:false,kick:false,guard:false,dash:false});
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const images = { atlas: new Image(), background: new Image(), walk: new Image() };
@@ -175,7 +176,9 @@
   }
   function inputFor(index) {
     if (document.hidden || $('helpDialog').open || controls.isOpen) return empty();
-    return controls.input(index,keys);
+    const input=controls.input(index,keys);
+    if(index===0)for(const action of touchHeld)if(Object.prototype.hasOwnProperty.call(input,action))input[action]=true;
+    return input;
   }
   function controlsHint(player){
     const k=action=>controls.keyLabel(action,player);
@@ -279,10 +282,41 @@
     updateControlLabels();
   }
   function releaseKeys() {
-    keys.clear();
+    keys.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();
+    document.querySelectorAll('.touch-key.pressed').forEach(el=>el.classList.remove('pressed'));
     if (net && net.connected && onlineRole==='guest') {
       net.send({type:'input',seq:++inputSeq,keys:empty(),actions:{...localActions},focused:!document.hidden});
     }
+  }
+  function touchPress(element,event){
+    const action=element&&element.dataset&&element.dataset.keyAction;
+    if(!action||!Object.prototype.hasOwnProperty.call(empty(),action)||touchPointers.has(event.pointerId))return;
+    event.preventDefault();
+    if(!playing||paused||disconnected||$('helpDialog').open||controls.isOpen)return;
+    try{element.setPointerCapture(event.pointerId);}catch(_){}
+    touchPointers.set(event.pointerId,{action,element});
+    const count=(touchCounts.get(action)||0)+1;touchCounts.set(action,count);touchHeld.add(action);
+    element.classList.add('pressed');element.setAttribute('aria-pressed','true');
+    if(count===1&&tapKeys.includes(action))localActions[action]++;
+    unlockAudio();sendInput();
+  }
+  function touchRelease(event){
+    const active=touchPointers.get(event.pointerId);if(!active)return;
+    event.preventDefault();touchPointers.delete(event.pointerId);
+    const count=Math.max(0,(touchCounts.get(active.action)||1)-1);
+    if(count){touchCounts.set(active.action,count);}
+    else{touchCounts.delete(active.action);touchHeld.delete(active.action);active.element.classList.remove('pressed');active.element.setAttribute('aria-pressed','false');}
+    sendInput();
+  }
+  function setupTouchControls(){
+    document.querySelectorAll('.touch-key[data-key-action]').forEach(element=>{
+      element.setAttribute('aria-pressed','false');
+      element.addEventListener('pointerdown',event=>touchPress(element,event));
+      element.addEventListener('pointerup',touchRelease);
+      element.addEventListener('pointercancel',touchRelease);
+      element.addEventListener('lostpointercapture',touchRelease);
+      element.addEventListener('contextmenu',event=>event.preventDefault());
+    });
   }
   function closeNet() {
     ++netEpoch;
@@ -824,6 +858,6 @@
     $('networkStatus').textContent='Bạn được mời vào phòng '+invitedCode.toUpperCase()+'. Nhập tên rồi bấm Vào.';
   }
   ensureProfile().then(()=>{profileState=RoosterProfile.state;updateProfileUI();setRoles();}).catch(()=>{});
-  updateTrainingUI();setRoles();
+  updateTrainingUI();setRoles();setupTouchControls();
   setInterval(tick,1000/60);requestAnimationFrame(render);
 })();
