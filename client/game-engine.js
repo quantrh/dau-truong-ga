@@ -470,11 +470,11 @@
       const d = Math.abs(other.x - f.x), direction = Math.sign(other.x - f.x) || 1;
       const input = emptyInput();
       const easy = this.difficulty === 'easy', hard = this.difficulty === 'hard';
-      b.timer = (easy ? 0.22 : hard ? 0.085 : 0.13) + this._random() * (easy ? 0.24 : 0.14);
+      b.timer = (easy ? 0.34 : hard ? 0.085 : 0.13) + this._random() * (easy ? 0.30 : 0.14);
       const advance = () => { input.left = direction < 0; input.right = direction > 0; };
       const retreat = () => { input.left = direction > 0; input.right = direction < 0; };
       const threatened = other.attackType && d < 225 && Math.abs(other.y - f.y) < 150;
-      const guardChance = easy ? 0.22 : hard ? 0.83 : 0.58;
+      const guardChance = easy ? 0.10 : hard ? 0.83 : 0.58;
       if (threatened && !easy && f.stamina > 45 && f.dashCooldown <= 0 && this._random() < (hard ? 0.12 : 0.05)) {
         retreat(); input.dash = true;
       } else if (threatened && f.stamina > 20 && this._random() < guardChance) {
@@ -485,15 +485,15 @@
         if (f.x < 140 || f.x > 1140) { input.left = false; input.right = false; input.jump = this._random() < 0.3; advance(); }
       } else if (d > 180) {
         advance();
-        if (d < 280 && this._random() < 0.09) input.jump = true;
+        if (d < 280 && this._random() < (easy ? 0.035 : 0.09)) input.jump = true;
       } else {
         const roll = this._random();
         if (d > 151 && roll < 0.5) advance();
-        if (roll < (easy ? 0.27 : hard ? 0.6 : 0.46)) {
-          input.kick = f.stamina >= 25 && (d > 148 || this._random() < 0.42);
+        if (roll < (easy ? 0.18 : hard ? 0.6 : 0.46)) {
+          input.kick = f.stamina >= 25 && (easy ? (d > 165 && this._random() < 0.22) : (d > 148 || this._random() < 0.42));
           input.peck = !input.kick && d < 154;
-        } else if (roll < 0.73) input.guard = this._random() < 0.55;
-        else if (roll < 0.88) retreat();
+        } else if (roll < (easy ? 0.48 : 0.73)) input.guard = this._random() < (easy ? 0.25 : 0.55);
+        else if (roll < (easy ? 0.90 : 0.88)) retreat();
         else { input.jump = true; advance(); }
       }
       b.input = input;
