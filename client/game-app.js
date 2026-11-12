@@ -105,15 +105,25 @@
     if(profileInitPromise)return profileInitPromise;
     profileInitPromise=RoosterProfile.init(playerName()).then(state=>{
       profileState=state;updateProfileUI();
-      if(!state.ready&&state.error)toast('Supabase: '+state.error);
+      // Profile/progression is optional; connectivity errors must never block gameplay.
       return state;
     }).finally(()=>{profileInitPromise=null;});
     return profileInitPromise;
   }
+  function fallbackIdentity(){
+    return {accessToken:'',roosterId:'',roosterName:playerName()+' · Chiến kê',powerRating:100};
+  }
   async function profileIdentity(){
-    const state=await ensureProfile();
-    if(!state||!state.ready)return {accessToken:'',roosterId:'',roosterName:playerName()+' · Chiến kê',powerRating:100};
-    return RoosterProfile.identity();
+    const fallback=fallbackIdentity();
+    const timeout=new Promise(resolve=>setTimeout(()=>resolve(null),1400));
+    try{
+      const state=await Promise.race([ensureProfile(),timeout]);
+      if(!state||!state.ready)return fallback;
+      const identity=await Promise.race([RoosterProfile.identity(),timeout]);
+      return identity&&typeof identity==='object'?identity:fallback;
+    }catch(_){
+      return fallback;
+    }
   }
   function currentPowerMode(){return $('powerMode')&&$('powerMode').value==='progression'?'progression':'balanced';}
   function updatePowerModeHint(){
@@ -669,12 +679,14 @@
     onlineAutoCreating=true;syncMobileQuickAction();
     playing=false;disconnected=false;resetVisuals();releaseKeys();$('splash').hidden=false;$('sceneLabel').hidden=false;
     $('networkStatus').textContent='Đang tạo phòng và chuẩn bị link mời…';$('networkStatus').classList.remove('error');
-    const identity=await profileIdentity();
-    const current=createNetwork();
-    try{await current.create(playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId,matchMode:currentPowerMode()});}
-    catch(error){
+    let current=null;
+    try{
+      const identity=await profileIdentity();
+      current=createNetwork();
+      await current.create(playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId,matchMode:currentPowerMode()});
+    }catch(error){
       onlineAutoCreating=false;
-      if(current===net){$('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');}
+      if(!current||current===net){$('networkStatus').textContent=error&&error.message?error.message:'Không tạo được phòng. Chạm Online để thử lại.';$('networkStatus').classList.add('error');}
       syncMobileQuickAction();
     }
   }
@@ -692,14 +704,15 @@
       $('networkStatus').textContent='Đang tự động vào phòng '+code+' từ link mời…';
       $('networkStatus').classList.remove('error');
     }
-    const identity=await profileIdentity();
-    const current=createNetwork();
+    let current=null;
     try{
+      const identity=await profileIdentity();
+      current=createNetwork();
       await current.join(code,playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId});
       return true;
     }catch(error){
-      if(current===net){
-        $('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');
+      if(!current||current===net){
+        $('networkStatus').textContent=error&&error.message?error.message:'Không vào được phòng. Hãy mở lại link mời.';$('networkStatus').classList.add('error');
         if(auto){$('roomEntry').hidden=true;$('networkStatus').textContent='Link mời không còn hiệu lực. Hãy nhờ chủ phòng gửi link mới.';}
       }
       return false;
