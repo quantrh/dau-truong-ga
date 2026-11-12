@@ -19,8 +19,8 @@ test('last pressed horizontal direction wins while both keys overlap',async()=>{
   assert.ok(app.includes("const directionPriority=['','']"));
   assert.ok(app.includes("if(input.left&&input.right)"));
   assert.ok(app.includes("input.left=preferred==='left';input.right=preferred==='right'"));
-  assert.ok(app.includes("if(e.code===map.left)directionPriority[player]='left'"));
-  assert.ok(app.includes("else if(e.code===map.right)directionPriority[player]='right'"));
+  assert.ok(app.includes("if(e.code===map.left||e.code===map.right){"));
+  assert.ok(app.includes("directionPriority[player]=e.code===map.left?'left':'right'"));
 });
 
 test('holding right keeps movement alive for several seconds after reversal',()=>{

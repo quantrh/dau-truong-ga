@@ -7,6 +7,8 @@
   const keys = new Set();
   const touchHeld = new Set(), touchPointers = new Map(), touchCounts = new Map();
   const directionPriority=['',''];
+  const keyRepeatGrace=new Map();
+  const KEY_REPEAT_GRACE_MS=140;
   const empty = () => ({left:false,right:false,jump:false,peck:false,kick:false,guard:false,dash:false});
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const images = { atlas: new Image(), background: new Image(), walk: new Image() };
@@ -181,9 +183,14 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { $('toast').hidden = true; }, 4200);
   }
+  function codeIsHeld(code){
+    const until=keyRepeatGrace.get(code)||0;
+    if(until&&until<=performance.now())keyRepeatGrace.delete(code);
+    return keys.has(code)||until>performance.now();
+  }
   function directionIsHeld(index,action){
     const binding=controls.mapping(index)[action];
-    return keys.has(binding)||(index===0&&touchHeld.has(action));
+    return codeIsHeld(binding)||(index===0&&touchHeld.has(action));
   }
   function reconcileDirectionPriority(index){
     const preferred=directionPriority[index];
@@ -196,7 +203,7 @@
   }
   function inputFor(index) {
     if (document.hidden || $('helpDialog').open || controls.isOpen) return empty();
-    const input=controls.input(index,keys);
+    const input=controls.input(index,{has:code=>codeIsHeld(code)});
     if(index===0)for(const action of touchHeld)if(Object.prototype.hasOwnProperty.call(input,action))input[action]=true;
     reconcileDirectionPriority(index);
     if(input.left&&input.right){
@@ -351,7 +358,7 @@
     updateControlLabels();
   }
   function releaseKeys() {
-    keys.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();directionPriority[0]='';directionPriority[1]='';
+    keys.clear();keyRepeatGrace.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();directionPriority[0]='';directionPriority[1]='';
     document.querySelectorAll('.touch-key.pressed').forEach(el=>el.classList.remove('pressed'));
     if (net && net.connected && onlineRole==='guest') {
       net.send({type:'input',seq:++inputSeq,keys:empty(),actions:{...localActions},focused:!document.hidden});
@@ -900,14 +907,23 @@
       const before=inputFor(0);keys.add(e.code);
       for(let player=0;player<2;player++){
         const map=controls.mapping(player);
-        if(e.code===map.left)directionPriority[player]='left';
-        else if(e.code===map.right)directionPriority[player]='right';
+        if(e.code===map.left||e.code===map.right){
+          directionPriority[player]=e.code===map.left?'left':'right';
+          if(e.repeat)keyRepeatGrace.set(e.code,performance.now()+KEY_REPEAT_GRACE_MS);
+        }
       }
-      if(!e.repeat){unlockAudio();const after=inputFor(0);for(const a of tapKeys){if(after[a]&&!before[a])localActions[a]++;}sendInput();}
+      if(!e.repeat){unlockAudio();const after=inputFor(0);for(const a of tapKeys){if(after[a]&&!before[a])localActions[a]++;}}
+      sendInput();
     }
   });
   document.addEventListener('keyup',e=>{
     keys.delete(e.code);
+    let directionKey=false;
+    for(let player=0;player<2;player++){
+      const map=controls.mapping(player);
+      if(e.code===map.left||e.code===map.right)directionKey=true;
+    }
+    if(!directionKey||!keyRepeatGrace.has(e.code))keyRepeatGrace.delete(e.code);
     for(let player=0;player<2;player++)reconcileDirectionPriority(player);
     sendInput();
   });
