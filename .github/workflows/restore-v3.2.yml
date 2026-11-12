@@ -2,7 +2,7 @@ name: Restore v3.2 verification
 
 on:
   push:
-    branches: [main, restore-v3.2-supabase, fix-v3.2.1-hit-sync, feature-v3.2.2-mobile-touch, feature-v3.2.3-mobile-gamepad-autojoin, feature-v3.2.4-mobile-layout-cleanup, feature-v3.2.5-3d-buttons]
+    branches: [main, restore-v3.2-supabase, fix-v3.2.1-hit-sync, feature-v3.2.2-mobile-touch, feature-v3.2.3-mobile-gamepad-autojoin, feature-v3.2.4-mobile-layout-cleanup, feature-v3.2.5-3d-buttons, feature-v3.2.6-crouch-dodge]
   pull_request:
     branches: [main]
 
