@@ -7,7 +7,7 @@ const html = await makeHTML();
 const assets = await embeddedAssets();
 const rooms = await readFile(path.join(ROOT, 'worker/rooms.js'), 'utf8');
 const wrapper = (await readFile(path.join(ROOT, 'worker/index.js'), 'utf8')).replace(/^import .*;\r?\n/gm, '');
-const generated = `const HTML=${JSON.stringify(html)};\nconst ASSETS=${JSON.stringify(assets)};\nconst VERSION='3.2.5';\n`;
+const generated = `const HTML=${JSON.stringify(html)};\nconst ASSETS=${JSON.stringify(assets)};\nconst VERSION='3.2.6';\n`;
 const worker = generated + rooms + '\n' + wrapper;
 await mkdir(path.join(ROOT, 'dist/server'), { recursive: true });
 await mkdir(path.join(ROOT, 'dist/.openai'), { recursive: true });
