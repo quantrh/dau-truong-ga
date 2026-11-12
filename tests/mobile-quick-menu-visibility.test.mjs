@@ -4,8 +4,8 @@ import { readFile } from 'node:fs/promises';
 
 test('mobile quick menu cannot be hidden by later base CSS', async()=>{
   const shell=await readFile(new URL('../client/shell.html',import.meta.url),'utf8');
-  assert.ok(shell.includes('.mobile-quick-launch{display:grid!important;'));
-  assert.ok(shell.includes('.mobile-quick-launch[hidden]{display:none!important}'));
+  assert.ok(shell.includes('body:not(.combat-active) .mobile-quick-launch{display:grid!important;'));
+  assert.ok(shell.includes('.combat-active .mobile-quick-launch{display:none!important}'));
 });
 
 test('mobile still has all quick modes and primary action', async()=>{
