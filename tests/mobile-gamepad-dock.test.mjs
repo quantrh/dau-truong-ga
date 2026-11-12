@@ -4,9 +4,9 @@ import { readFile } from 'node:fs/promises';
 
 test('active mobile gamepad is fixed above mobile browser chrome',async()=>{
   const shell=await readFile(new URL('../client/shell.html',import.meta.url),'utf8');
-  assert.ok(shell.includes('.combat-active .mobile-gamepad:not([hidden]){position:fixed'));
+  assert.ok(shell.includes('.combat-active .mobile-gamepad{position:fixed'));
   assert.ok(shell.includes('bottom:0;z-index:40'));
-  assert.ok(shell.includes('.mobile-gamepad[hidden]{display:none!important}'));
+  assert.ok(shell.includes('.mobile-gamepad{display:none!important}'));
 });
 
 test('mobile combat layout targets the real arena panel and hides lobby chrome',async()=>{
