@@ -42,3 +42,10 @@ test('result return button closes overlay immediately and supports touch pointer
   assert.ok(app.includes("$('returnBtn').addEventListener('pointerup'"));
   assert.ok(app.includes("returnToLobby(event)"));
 });
+
+
+test('training and matches force-hide the intro splash until returning to lobby',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes("$('splash').hidden=true;$('splash').style.display='none'"));
+  assert.ok(app.includes("$('splash').style.display='';$('splash').hidden=false"));
+});
