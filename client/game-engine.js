@@ -332,7 +332,9 @@
             if (this.state.mode === 'training') {
               if (direction) f.facing = direction > 0 ? 1 : -1;
             } else f.facing = other.x >= f.x ? 1 : -1;
-            f.vx += f.facing * (kind === 'kick' ? 145 : 55);
+            const attackStep = kind === 'kick' ? 24 : 14;
+            f.x = clamp(f.x + f.facing * attackStep, MIN_X, MAX_X);
+            f.vx += f.facing * (kind === 'kick' ? 190 : 95);
             this._setAction(f, kind);
             this._emit('attack', { fighter: i, kind });
           }
@@ -384,9 +386,13 @@
 
     _hit({ a, b, attack, kind }) {
       const airborne = a.y > 20;
+      const distance = Math.abs(b.x - a.x);
       const airBonus = airborne ? (kind === 'kick' ? 4 : 2) : 0;
+      const distanceRatio = clamp(distance / attack.range, 0, 1);
+      // Close contact hits harder; grazing the edge of attack range does less damage.
+      const distanceMultiplier = 1.22 - 0.40 * distanceRatio;
       const powerMultiplier = this.state.matchRules && this.state.matchRules.powerMode === 'progression' ? 1 + (clamp(finite(a.powerRating,100),100,130) - 100) / 200 : 1;
-      let damage = (attack.damage + airBonus) * powerMultiplier;
+      let damage = (attack.damage + airBonus) * distanceMultiplier * powerMultiplier;
       let blocked = b.guarding && (a.x - b.x) * b.facing > -10;
       let guardBreak = false;
       if (blocked) {
@@ -423,7 +429,7 @@
       this._emit(guardBreak ? 'guardBreak' : blocked ? 'block' : 'hit', {
         fighter: a.id, target: b.id, kind, damage: Math.round(damage * 10) / 10,
         x: (a.x + b.x) / 2, y: Math.max(a.y, b.y) + 95, combo: a.combo,
-        aerial: airborne, powerRating: a.powerRating
+        aerial: airborne, powerRating: a.powerRating, distance: Math.round(distance), distanceMultiplier: Math.round(distanceMultiplier*100)/100
       });
     }
 
