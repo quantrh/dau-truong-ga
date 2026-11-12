@@ -7,7 +7,7 @@ test('mobile gamepad is a compact two-thumb overlay',async()=>{
   assert.ok(shell.includes('id="mobileGamepad"'));
   assert.ok(shell.includes('mobile-pad-left'));
   assert.ok(shell.includes('mobile-pad-right'));
-  assert.ok(shell.includes('.mobile-gamepad:not([hidden]){position:absolute'));
+  assert.ok(shell.includes('.mobile-gamepad:not([hidden]){position:relative'));
   assert.ok(shell.includes('.controls-strip{display:none}'));
   for(const action of ['left','right','jump','peck','kick','guard','dash']){
     assert.ok(shell.includes('mobile-pad-btn touch-key') && shell.includes('data-key-action="'+action+'"'),action+' missing from gamepad');
