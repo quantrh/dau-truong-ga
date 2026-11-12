@@ -7,8 +7,8 @@
   const keys = new Set();
   const touchHeld = new Set(), touchPointers = new Map(), touchCounts = new Map();
   const directionPriority=['',''];
-  const keyRepeatGrace=new Map();
-  const KEY_REPEAT_GRACE_MS=140;
+  const keyRepeatGrace=new Map(), directionTapBuffer=new Map();
+  const KEY_REPEAT_GRACE_MS=140, DIRECTION_TAP_BUFFER_MS=95;
   const empty = () => ({left:false,right:false,jump:false,peck:false,kick:false,guard:false,dash:false});
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const images = { atlas: new Image(), background: new Image(), walk: new Image() };
@@ -184,9 +184,12 @@
     toastTimer = setTimeout(() => { $('toast').hidden = true; }, 4200);
   }
   function codeIsHeld(code){
-    const until=keyRepeatGrace.get(code)||0;
-    if(until&&until<=performance.now())keyRepeatGrace.delete(code);
-    return keys.has(code)||until>performance.now();
+    const now=performance.now();
+    const repeatUntil=keyRepeatGrace.get(code)||0;
+    const tapUntil=directionTapBuffer.get(code)||0;
+    if(repeatUntil&&repeatUntil<=now)keyRepeatGrace.delete(code);
+    if(tapUntil&&tapUntil<=now)directionTapBuffer.delete(code);
+    return keys.has(code)||repeatUntil>now||tapUntil>now;
   }
   function directionIsHeld(index,action){
     const binding=controls.mapping(index)[action];
@@ -358,7 +361,7 @@
     updateControlLabels();
   }
   function releaseKeys() {
-    keys.clear();keyRepeatGrace.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();directionPriority[0]='';directionPriority[1]='';
+    keys.clear();keyRepeatGrace.clear();directionTapBuffer.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();directionPriority[0]='';directionPriority[1]='';
     document.querySelectorAll('.touch-key.pressed').forEach(el=>el.classList.remove('pressed'));
     if (net && net.connected && onlineRole==='guest') {
       net.send({type:'input',seq:++inputSeq,keys:empty(),actions:{...localActions},focused:!document.hidden});
@@ -910,6 +913,7 @@
         if(e.code===map.left||e.code===map.right){
           directionPriority[player]=e.code===map.left?'left':'right';
           if(e.repeat)keyRepeatGrace.set(e.code,performance.now()+KEY_REPEAT_GRACE_MS);
+          else directionTapBuffer.set(e.code,performance.now()+DIRECTION_TAP_BUFFER_MS);
         }
       }
       if(!e.repeat){unlockAudio();const after=inputFor(0);for(const a of tapKeys){if(after[a]&&!before[a])localActions[a]++;}}
