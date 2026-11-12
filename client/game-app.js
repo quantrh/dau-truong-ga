@@ -496,7 +496,7 @@
     if(mode==='training')resetTrainingProgress();
     setRoles();unlockAudio();updateHUD();
     const focusTarget=$('mobileGamepad')&&!$('mobileGamepad').hidden?document.querySelector('.arena-panel'):$('arena');
-    requestAnimationFrame(()=>focusTarget.scrollIntoView({behavior:'smooth',block:'start'}));
+    requestAnimationFrame(()=>focusTarget.scrollIntoView({behavior:'auto',block:'start'}));
   }
   function showCenter(kicker,title,detail) {
     $('centerMessage').hidden=false;
@@ -943,7 +943,14 @@
   });
   document.querySelectorAll('.mode-card').forEach(b=>b.addEventListener('click',()=>selectMode(b.dataset.mode)));
   document.querySelectorAll('[data-quick-mode]').forEach(b=>b.addEventListener('click',()=>selectMode(b.dataset.quickMode)));
-  $('mobilePrimaryBtn').addEventListener('click',()=>{
+  const mobilePrimaryBtn=$('mobilePrimaryBtn');
+  mobilePrimaryBtn.addEventListener('pointerup',event=>{
+    if(event.pointerType!=='touch'&&event.pointerType!=='pen')return;
+    if(playing||!loaded||selectedMode==='online')return;
+    event.preventDefault();
+    beginGame(selectedMode);
+  });
+  mobilePrimaryBtn.addEventListener('click',()=>{
     if(playing||!loaded)return;
     if(selectedMode!=='online'){beginGame(selectedMode);return;}
     if(!net||!roomRoster){hostRoom();return;}
