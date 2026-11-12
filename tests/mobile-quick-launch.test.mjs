@@ -14,7 +14,7 @@ test('mobile launcher exposes four compact mode chips and one primary action',as
 
 test('verbose mobile lobby content is hidden in favor of quick launch',async()=>{
   const shell=await readFile(new URL('../client/shell.html',import.meta.url),'utf8');
-  assert.ok(shell.includes('.lobby-heading,.lobby>.mode-list{display:none}'));
+  assert.ok(shell.includes('.lobby-heading{display:none}.lobby>.mode-list{display:none}'));
   assert.ok(shell.includes('.training-coach,.match-facts,.start-caption,.online-intro,.tip-card,.network-details{display:none!important}'));
   assert.ok(shell.includes('#offlineOptions .start-btn{display:none}'));
 });
