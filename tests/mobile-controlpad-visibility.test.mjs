@@ -23,3 +23,13 @@ test('combat start scrolls the real arena panel into view',async()=>{
   assert.ok(app.includes("document.querySelector('.arena-panel')"));
   assert.ok(app.includes("focusTarget.scrollIntoView({behavior:'auto',block:'start'})"));
 });
+
+
+test('active match always exposes a mobile exit button back to lobby',async()=>{
+  const shell=await readFile(new URL('../client/shell.html',import.meta.url),'utf8');
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(shell.includes('id="exitMatchBtn"'));
+  assert.ok(shell.includes('.combat-active .exit-match-btn{position:fixed'));
+  assert.ok(app.includes("if($('exitMatchBtn'))$('exitMatchBtn').hidden=false"));
+  assert.ok(app.includes("$('exitMatchBtn').addEventListener('click',()=>lobby())"));
+});
