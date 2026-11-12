@@ -417,7 +417,8 @@
     s.fighters.forEach((f,i)=>{
       $('hp'+i).style.width=f.hp+'%';$('sp'+i).style.width=f.stamina+'%';
       $('hpText'+i).textContent=String(Math.ceil(f.hp));
-      $('hp'+i).parentElement.setAttribute('aria-label','Sức chiến đấu '+names[i]+': '+Math.ceil(f.hp));
+      $('hp'+i).classList.toggle('danger',f.hp<=30);
+      $('hp'+i).parentElement.setAttribute('aria-label','Máu '+names[i]+': '+Math.ceil(f.hp)+' trên 100');
       Array.from($('wins'+i).children).forEach((el,j)=>el.classList.toggle('won',j<s.wins[i]));
     });
     if(selectedMode==='training'){
