@@ -22,7 +22,8 @@ test('verbose mobile lobby content is hidden in favor of quick launch',async()=>
 test('mobile primary action changes with local and online state',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   assert.ok(app.includes("btn.textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →'"));
-  assert.ok(app.includes("btn.textContent='TẠO PHÒNG ONLINE →'"));
+  assert.ok(app.includes("btn.textContent=onlineAutoCreating?'ĐANG TẠO PHÒNG…':'ĐANG CHUẨN BỊ PHÒNG…'"));
+  assert.ok(app.includes("btn.textContent='CHIA SẺ LỜI MỜI →'"));
   assert.ok(app.includes("btn.textContent='TÔI ĐÃ SẴN SÀNG →'"));
   assert.ok(app.includes("btn.textContent=canStart?'BẮT ĐẦU ONLINE →':'CHỜ ĐỐI THỦ SẴN SÀNG'"));
 });
@@ -31,4 +32,16 @@ test('quick launcher is hidden while playing and restored in lobby',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   assert.ok(app.includes("$('mobileQuickLaunch').hidden=true"));
   assert.ok(app.includes("$('mobileQuickLaunch').hidden=false"));
+});
+
+
+test('online mode auto-creates a room and exposes native sharing',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  const shell=await readFile(new URL('../client/shell.html',import.meta.url),'utf8');
+  assert.ok(app.includes("if(mode==='online')maybeAutoHostOnline()"));
+  assert.ok(app.includes('function maybeAutoHostOnline()'));
+  assert.ok(app.includes('navigator.share'));
+  assert.ok(app.includes("$('copyInviteBtn').addEventListener('click',shareInvite)"));
+  assert.ok(shell.includes('id="inviteLink"'));
+  assert.ok(shell.includes('Chia sẻ lời mời →'));
 });
