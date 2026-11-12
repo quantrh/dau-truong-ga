@@ -6,6 +6,7 @@
   const names = ['Gà Điều', 'Gà Trắng'];
   const keys = new Set();
   const touchHeld = new Set(), touchPointers = new Map(), touchCounts = new Map();
+  const directionPriority=['',''];
   const empty = () => ({left:false,right:false,jump:false,peck:false,kick:false,guard:false,dash:false});
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const images = { atlas: new Image(), background: new Image(), walk: new Image() };
@@ -180,10 +181,28 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { $('toast').hidden = true; }, 4200);
   }
+  function directionIsHeld(index,action){
+    const binding=controls.mapping(index)[action];
+    return keys.has(binding)||(index===0&&touchHeld.has(action));
+  }
+  function reconcileDirectionPriority(index){
+    const preferred=directionPriority[index];
+    if(preferred&&directionIsHeld(index,preferred))return;
+    const other=preferred==='left'?'right':preferred==='right'?'left':'';
+    if(other&&directionIsHeld(index,other)){directionPriority[index]=other;return;}
+    if(directionIsHeld(index,'left'))directionPriority[index]='left';
+    else if(directionIsHeld(index,'right'))directionPriority[index]='right';
+    else directionPriority[index]='';
+  }
   function inputFor(index) {
     if (document.hidden || $('helpDialog').open || controls.isOpen) return empty();
     const input=controls.input(index,keys);
     if(index===0)for(const action of touchHeld)if(Object.prototype.hasOwnProperty.call(input,action))input[action]=true;
+    reconcileDirectionPriority(index);
+    if(input.left&&input.right){
+      const preferred=directionPriority[index];
+      input.left=preferred==='left';input.right=preferred==='right';
+    }
     return input;
   }
   function controlsHint(player){
@@ -332,7 +351,7 @@
     updateControlLabels();
   }
   function releaseKeys() {
-    keys.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();
+    keys.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();directionPriority[0]='';directionPriority[1]='';
     document.querySelectorAll('.touch-key.pressed').forEach(el=>el.classList.remove('pressed'));
     if (net && net.connected && onlineRole==='guest') {
       net.send({type:'input',seq:++inputSeq,keys:empty(),actions:{...localActions},focused:!document.hidden});
@@ -346,6 +365,7 @@
     try{element.setPointerCapture(event.pointerId);}catch(_){}
     touchPointers.set(event.pointerId,{action,element});
     const count=(touchCounts.get(action)||0)+1;touchCounts.set(action,count);touchHeld.add(action);
+    if(action==='left'||action==='right')directionPriority[0]=action;
     element.classList.add('pressed');element.setAttribute('aria-pressed','true');
     if(count===1&&tapKeys.includes(action))localActions[action]++;
     unlockAudio();sendInput();
@@ -356,6 +376,7 @@
     const count=Math.max(0,(touchCounts.get(active.action)||1)-1);
     if(count){touchCounts.set(active.action,count);}
     else{touchCounts.delete(active.action);touchHeld.delete(active.action);active.element.classList.remove('pressed');active.element.setAttribute('aria-pressed','false');}
+    if(active.action==='left'||active.action==='right')reconcileDirectionPriority(0);
     sendInput();
   }
   function setupTouchControls(){
@@ -877,10 +898,19 @@
     if((e.code==='KeyP'||e.code==='Escape')&&!e.repeat){togglePause();return;}
     if(controlCodes.has(e.code)){
       const before=inputFor(0);keys.add(e.code);
+      for(let player=0;player<2;player++){
+        const map=controls.mapping(player);
+        if(e.code===map.left)directionPriority[player]='left';
+        else if(e.code===map.right)directionPriority[player]='right';
+      }
       if(!e.repeat){unlockAudio();const after=inputFor(0);for(const a of tapKeys){if(after[a]&&!before[a])localActions[a]++;}sendInput();}
     }
   });
-  document.addEventListener('keyup',e=>{keys.delete(e.code);sendInput();});
+  document.addEventListener('keyup',e=>{
+    keys.delete(e.code);
+    for(let player=0;player<2;player++)reconcileDirectionPriority(player);
+    sendInput();
+  });
   window.addEventListener('blur',()=>{
     releaseKeys();if(playing&&selectedMode!=='online')togglePause(true);
   });
