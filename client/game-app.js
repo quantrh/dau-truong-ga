@@ -34,7 +34,7 @@
   let trainingDone=new Set(),trainingLastX=640;
   let profileState=null,profileInitPromise=null;
   const invitedCode=(new URLSearchParams(location.search).get('room')||'').trim().toUpperCase();
-  let inviteAutoJoinStarted=false;
+  let inviteAutoJoinStarted=false,onlineAutoCreating=false;
   function clearRemoteActions(){remotePending=freshActions();remoteRelease={jump:false,dash:false};}
   function receiveActions(raw){
     if(!raw||typeof raw!=='object')return;
@@ -442,13 +442,13 @@
       btn.textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →';btn.disabled=false;return;
     }
     if(!net||!roomRoster){
-      btn.textContent='TẠO PHÒNG ONLINE →';btn.disabled=false;return;
+      btn.textContent=onlineAutoCreating?'ĐANG TẠO PHÒNG…':'ĐANG CHUẨN BỊ PHÒNG…';btn.disabled=true;return;
     }
     if(roomRoster.status==='playing'){
       btn.textContent='TRẬN ĐANG DIỄN RA';btn.disabled=true;return;
     }
     if(!roomRoster.guest){
-      btn.textContent='CHỜ BẠN VÀO PHÒNG';btn.disabled=true;return;
+      btn.textContent='CHIA SẺ LỜI MỜI →';btn.disabled=false;return;
     }
     const self=onlineRole==='guest'?roomRoster.guest:roomRoster.host;
     if(!self||!self.ready){
@@ -479,6 +479,7 @@
     $('startCaption').textContent=mode==='training'?'Tập tự do, không giới hạn thời gian.':mode==='local'?'Hai người dùng chung bàn phím.':'Bạn điều khiển Gà Điều ở bên trái.';
     if(mode!=='online'&&$('powerMode'))$('powerMode').disabled=false;
     updatePowerModeHint();syncMobileQuickAction();
+    if(mode==='online')maybeAutoHostOnline();
   }
   function beginGame(mode) {
     if(!loaded)return;
@@ -590,6 +591,8 @@
     const self=onlineRole==='guest'?room.guest:room.host;
     $('roomRoster').hidden=false;$('roomCard').hidden=false;
     $('roomCode').textContent=room.code;$('roomCount').textContent=room.guest?'2 / 2':'1 / 2';
+    const invite=shareURL();if($('inviteLink')){$('inviteLink').textContent=invite;$('inviteLink').href=invite;}
+    onlineAutoCreating=false;
     $('hostName').textContent=(room.host.roosterName||room.host.name)+' · P'+(room.host.powerRating||100)+(onlineRole==='host'?' (bạn)':'');
     $('guestName').textContent=room.guest?(room.guest.roosterName||room.guest.name)+' · P'+(room.guest.powerRating||100)+(onlineRole==='guest'?' (bạn)':''):'Đang chờ bạn…';
     for(const role of ['host','guest']){
@@ -661,12 +664,22 @@
     return net;
   }
   async function hostRoom(){
-    if(!loaded){toast('Chờ hình ảnh tải xong rồi tạo phòng.');return;}
+    if(!loaded||onlineAutoCreating||net||roomRoster)return;
+    onlineAutoCreating=true;syncMobileQuickAction();
     playing=false;disconnected=false;resetVisuals();releaseKeys();$('splash').hidden=false;$('sceneLabel').hidden=false;
+    $('networkStatus').textContent='Đang tạo phòng và chuẩn bị link mời…';$('networkStatus').classList.remove('error');
     const identity=await profileIdentity();
     const current=createNetwork();
     try{await current.create(playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId,matchMode:currentPowerMode()});}
-    catch(error){if(current===net){$('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');}}
+    catch(error){
+      onlineAutoCreating=false;
+      if(current===net){$('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');}
+      syncMobileQuickAction();
+    }
+  }
+  function maybeAutoHostOnline(){
+    if(selectedMode!=='online'||RoosterNet.validCode(invitedCode)||!loaded||net||roomRoster||onlineAutoCreating)return;
+    hostRoom();
   }
   async function joinRoomCode(code,auto=false){
     code=String(code||'').trim().toUpperCase();
@@ -699,6 +712,18 @@
     if(inviteAutoJoinStarted||!loaded||!RoosterNet.validCode(invitedCode))return;
     inviteAutoJoinStarted=true;
     joinRoomCode(invitedCode,true);
+  }
+  async function shareInvite(){
+    if(!net||!roomRoster)return;
+    const url=shareURL();
+    try{
+      if(navigator.share){await navigator.share({title:'Đấu Trường Gà',text:'Vào phòng đấu với tôi:',url});return;}
+      await navigator.clipboard.writeText(url);toast('Đã chép link mời. Gửi link này cho bạn.');
+    }catch(error){
+      if(error&&error.name==='AbortError')return;
+      try{await navigator.clipboard.writeText(url);toast('Đã chép link mời. Gửi link này cho bạn.');}
+      catch(_){toast('Không thể mở chia sẻ. Hãy giữ vào link mời để sao chép.');}
+    }
   }
   function startRematch(){
     beginGame(selectedMode);
@@ -955,8 +980,8 @@
   mobilePrimaryBtn.addEventListener('click',()=>{
     if(playing||!loaded)return;
     if(selectedMode!=='online'){beginGame(selectedMode);return;}
-    if(!net||!roomRoster){hostRoom();return;}
-    if(!roomRoster.guest)return;
+    if(!net||!roomRoster){maybeAutoHostOnline();return;}
+    if(!roomRoster.guest){shareInvite();return;}
     const self=onlineRole==='guest'?roomRoster.guest:roomRoster.host;
     if(!self||!self.ready){$('readyBtn').click();return;}
     if(onlineRole==='host'&&!$('launchBtn').disabled)$('launchBtn').click();
@@ -998,10 +1023,7 @@
     if(!net)return;const current=net;$('launchBtn').disabled=true;
     try{await current.start();}catch(e){toast(e.message);if(net===current&&roomRoster)renderRoom(roomRoster);}
   });
-  $('copyInviteBtn').addEventListener('click',async()=>{
-    try{await navigator.clipboard.writeText(shareURL());toast('Đã sao chép link. Gửi cho bạn để vào đúng phòng.');}
-    catch(_){toast('Không chép được link. Hãy dùng nút Chép mã và gửi cùng địa chỉ trò chơi.');}
-  });
+  $('copyInviteBtn').addEventListener('click',shareInvite);
   function returnToLobby(event){
     if(event)event.preventDefault();
     $('resultOverlay').hidden=true;resultShown=false;playing=false;paused=false;
@@ -1067,7 +1089,7 @@
     document.fonts.load('italic 400 16px "Noto Sans Game"', 'Bản lĩnh trong từng nhịp cánh')
   ]).then(()=>{
     loaded=true;$('loading').hidden=true;$('startBtn').disabled=false;$('startBtn').textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →';syncMobileQuickAction();
-    setRoles();updateHUD();maybeAutoJoinInvite();
+    setRoles();updateHUD();maybeAutoJoinInvite();maybeAutoHostOnline();
   }).catch(()=>{
     $('loading').textContent='Không đọc được hình ảnh hoặc font chữ. Hãy tải lại file HTML đầy đủ rồi mở lại.';
   });
