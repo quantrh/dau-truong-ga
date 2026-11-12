@@ -626,6 +626,7 @@
     closeNet();
     const epoch=netEpoch;
     const options={
+      requestTimeout:5000,
       onStatus(status){
         if(epoch!==netEpoch)return;
         $('networkStatus').textContent=status.message;
@@ -681,13 +682,19 @@
     $('networkStatus').textContent='Đang tạo phòng và chuẩn bị link mời…';$('networkStatus').classList.remove('error');
     let current=null;
     try{
-      const identity=await profileIdentity();
+      // Online room creation must never wait for profile/Supabase Auth.
+      // The room server accepts an empty player identity and falls back to Power 100.
+      const identity=fallbackIdentity();
       current=createNetwork();
       await current.create(playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId,matchMode:currentPowerMode()});
     }catch(error){
       onlineAutoCreating=false;
-      if(!current||current===net){$('networkStatus').textContent=error&&error.message?error.message:'Không tạo được phòng. Chạm Online để thử lại.';$('networkStatus').classList.add('error');}
+      if(!current||current===net){
+        $('networkStatus').textContent=(error&&error.message?error.message:'Không tạo được phòng.')+' Chạm nút bên dưới để thử lại.';
+        $('networkStatus').classList.add('error');
+      }
       syncMobileQuickAction();
+      if($('mobilePrimaryBtn')){$('mobilePrimaryBtn').textContent='THỬ TẠO PHÒNG LẠI →';$('mobilePrimaryBtn').disabled=false;}
     }
   }
   function maybeAutoHostOnline(){
@@ -706,7 +713,8 @@
     }
     let current=null;
     try{
-      const identity=await profileIdentity();
+      // Invite links also bypass profile loading so joining works on flaky mobile networks.
+      const identity=fallbackIdentity();
       current=createNetwork();
       await current.join(code,playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId});
       return true;
@@ -994,7 +1002,11 @@
   mobilePrimaryBtn.addEventListener('click',()=>{
     if(playing||!loaded)return;
     if(selectedMode!=='online'){beginGame(selectedMode);return;}
-    if(!net||!roomRoster){maybeAutoHostOnline();return;}
+    if(!net||!roomRoster){
+      onlineAutoCreating=false;
+      maybeAutoHostOnline();
+      return;
+    }
     if(!roomRoster.guest){shareInvite();return;}
     const self=onlineRole==='guest'?roomRoster.guest:roomRoster.host;
     if(!self||!self.ready){$('readyBtn').click();return;}
