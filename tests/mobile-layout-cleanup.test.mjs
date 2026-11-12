@@ -37,3 +37,12 @@ test('saved rooster name is the online fallback and settings summary',async()=>{
   assert.ok(app.includes("const fallback=rooster&&rooster.name?rooster.name:'Người chơi'"));
   assert.ok(app.includes("$('settingsSummary').textContent=r.name+' · P'+r.powerRating"));
 });
+
+
+test('manual online room controls are hidden from the active UI',async()=>{
+  const shell=await readFile(new URL('../client/shell.html',import.meta.url),'utf8');
+  assert.ok(shell.includes('id="roomEntry" hidden aria-hidden="true"'));
+  assert.ok(shell.includes('id="createBtn" type="button" hidden'));
+  assert.ok(shell.includes('id="inviteLink"'));
+  assert.ok(shell.includes('Tự tạo phòng · Mời bằng link'));
+});
