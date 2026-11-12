@@ -56,8 +56,10 @@
   }
   function playerName(){
     const value=$('playerName').value.trim().normalize('NFC').slice(0,24);
+    const rooster=profileRooster();
+    const fallback=rooster&&rooster.name?rooster.name:'Người chơi';
     try{if(value)localStorage.setItem('rooster-player-name',value);}catch(_){}
-    return value || 'Người chơi';
+    return value || fallback;
   }
   function shareURL(){
     const base=window.ROOSTER_PUBLIC_GAME_URL||(location.protocol==='http:'||location.protocol==='https:'?location.href:'https://quantrh.github.io/dau-truong-ga/');
@@ -90,7 +92,9 @@
       $('grasshopperCount').textContent=String(r.grasshopper);
       $('henCount').textContent=String(r.hen);
       $('powerValue').textContent=String(r.powerRating);
-    }
+      if($('settingsSummary'))$('settingsSummary').textContent=r.name+' · P'+r.powerRating;
+      if(!$('playerName').value.trim())$('playerName').placeholder='Mặc định: '+r.name;
+    }else if($('settingsSummary'))$('settingsSummary').textContent='Power 100';
     updatePowerModeHint();
   }
   async function ensureProfile(){
@@ -356,6 +360,7 @@
       button.setAttribute('aria-pressed',String(active));
     });
     $('offlineOptions').hidden=mode==='online';$('onlineOptions').hidden=mode!=='online';
+    if($('settingsMenu')&&changed)$('settingsMenu').open=false;
     $('trainingCoach').hidden=mode!=='training';
     $('matchFacts').hidden=mode==='training';
     $('powerChoice').hidden=mode==='training';
