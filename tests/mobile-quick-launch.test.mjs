@@ -62,7 +62,7 @@ test('online room creation survives profile failures',async()=>{
   assert.ok(app.includes('function fallbackIdentity()'));
   assert.ok(app.includes("Promise.race([ensureProfile(),timeout])"));
   assert.ok(app.includes("catch(_){\n      return fallback;"));
-  assert.ok(app.includes("let current=null;\n    try{\n      const identity=await profileIdentity();"));
+  assert.ok(app.includes("const identity=fallbackIdentity();\n      current=createNetwork();"));
   assert.ok(app.includes("onlineAutoCreating=false;"));
 });
 
