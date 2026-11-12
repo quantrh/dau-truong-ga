@@ -639,7 +639,17 @@
       pose='kick';lean=-Math.max(-.07,Math.min(.09,f.vy/650*.075));
       bob+=Math.sin(time*19)*1.6;
     }else if(f.action==='dash'){
-      pose='idle';squash=.13;lean=f.dashDirection*f.facing*.16;bob=0;
+      const dodgePhase=Math.min(1,Math.max(0,f.dashTimer/.28));
+      const crouch=Math.sin(Math.min(1,(1-dodgePhase)*1.9)*Math.PI);
+      pose='idle';
+      // Dodge is a low ducking slide: compress the body, lower the center of mass
+      // and tuck the neck/head instead of only translating backward.
+      squash=.26+.08*crouch;
+      lean=f.dashDirection*f.facing*.11;
+      bob=-18-10*crouch;
+      lift-=4*crouch;
+      lunge-=f.dashDirection*5;
+      scale*=.96;
     }else if(f.action==='hurt'){
       const impact=Math.min(1,Math.max(.18,f.hurtTimer/.36));
       const recoil=Math.min(1,Math.abs(f.vx)/430);
@@ -674,7 +684,9 @@
       ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(x,ground+4,43,9,0,0,Math.PI*2);ctx.stroke();ctx.restore();
     }
     ctx.save();ctx.translate(x+v.lunge*f.facing,ground-altitude-bob);ctx.scale(f.facing,1);
-    ctx.rotate(v.lean);ctx.scale(1+v.squash*.3-Math.sin(v.turn/.09*Math.PI)*.07,1-v.squash);
+    ctx.rotate(v.lean);
+    const dashCrouch=f.action==='dash'?1:0;
+    ctx.scale(1+v.squash*.3-Math.sin(v.turn/.09*Math.PI)*.07+(dashCrouch*.05),1-v.squash-(dashCrouch*.10));
     const draw=()=>ctx.drawImage(source,sprite.x,sprite.y,sprite.w,sprite.h,-sprite.anchorX*scale,-sprite.anchorY*scale,sprite.w*scale,sprite.h*scale);
     if(f.dashTimer>0&&!reduced){
       for(let trail=2;trail>0;trail--){
