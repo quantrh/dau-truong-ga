@@ -484,6 +484,7 @@
   function beginGame(mode) {
     if(!loaded)return;
     playing=true;paused=false;disconnected=false;keys.clear();document.body.classList.add('combat-active');
+    game.setDifficulty(mode==='bot'?'easy':'normal');
     if(mode!=='online')applyLocalPowerRules(mode);
     else if(roomRoster)applyRoomPowerRules(roomRoster);
     game.reset(mode);resetVisuals();localActions=freshActions();remoteActions=freshActions();clearRemoteActions();networkHold=false;remoteHostPaused=false;remoteFocused=true;observedRound=1;
