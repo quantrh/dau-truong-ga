@@ -65,3 +65,12 @@ test('online room creation survives profile failures',async()=>{
   assert.ok(app.includes("let current=null;\n    try{\n      const identity=await profileIdentity();"));
   assert.ok(app.includes("onlineAutoCreating=false;"));
 });
+
+
+test('online host creation bypasses profile loading entirely',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes("const identity=fallbackIdentity();\n      current=createNetwork();\n      await current.create"));
+  assert.ok(app.includes("const identity=fallbackIdentity();\n      current=createNetwork();\n      await current.join"));
+  assert.ok(app.includes("requestTimeout:5000"));
+  assert.ok(app.includes("THỬ TẠO PHÒNG LẠI →"));
+});
