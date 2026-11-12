@@ -30,6 +30,8 @@
   const trainingSteps=['left','right','jump','peck','kick','guard','dash'];
   let trainingDone=new Set(),trainingLastX=640;
   let profileState=null,profileInitPromise=null;
+  const invitedCode=(new URLSearchParams(location.search).get('room')||'').trim().toUpperCase();
+  let inviteAutoJoinStarted=false;
   function clearRemoteActions(){remotePending=freshActions();remoteRelease={jump:false,dash:false};}
   function receiveActions(raw){
     if(!raw||typeof raw!=='object')return;
@@ -185,7 +187,7 @@
     return k('left')+'/'+k('right')+' di chuyển · '+k('jump')+' nhảy · '+k('peck')+'/'+k('kick')+' ra đòn · '+k('guard')+' thủ · '+k('dash')+' lướt';
   }
   function updateControlLabels(){
-    document.querySelectorAll('[data-key-action]').forEach(element=>{
+    document.querySelectorAll('.controls-strip [data-key-action]').forEach(element=>{
       element.textContent=controls.keyLabel(element.dataset.keyAction,Number(element.dataset.player)||0);
     });
     $('p2Controls').textContent='NGƯỜI 2: '+controlsHint(1);
@@ -334,7 +336,7 @@
     releaseKeys();closeNet();playing=false;paused=false;disconnected=false;
     applyLocalPowerRules(selectedMode);game.reset(selectedMode);resetVisuals();setRoles();
     $('splash').hidden=false;$('sceneLabel').hidden=false;$('centerMessage').hidden=true;
-    $('pauseBtn').hidden=true;
+    $('pauseBtn').hidden=true;if($('mobileGamepad'))$('mobileGamepad').hidden=true;
     const training=selectedMode==='training';
     $('arenaHint').textContent=training?'A/D di chuyển · Space nhảy · J/K ra đòn · L thủ · Shift trái lướt':'Sẵn sàng cho trận đấu đầu tiên?';
     $('footerState').textContent=training?'TẬP TỰ DO · THỂ LỰC VÔ HẠN':'TẠO PHÒNG · MỜI BẠN · VÀO SÂN';
@@ -371,6 +373,7 @@
     lastStateSeq=-1;lastInputSeq=-1;stateClock=0;inputClock=0;
     $('splash').hidden=true;$('sceneLabel').hidden=true;
     $('pauseBtn').hidden=mode==='online';
+    if($('mobileGamepad'))$('mobileGamepad').hidden=false;
     $('pauseBtn').textContent='II';
     $('startBtn').textContent=mode==='training'?'TẬP LẠI TỪ ĐẦU ↻':'CHƠI LẠI TỪ ĐẦU ↻';
     updateControlLabels();
@@ -401,7 +404,7 @@
     $('resultKicker').textContent=selectedMode==='local'?'NHÀ VÔ ĐỊCH SÂN ĐẤU':winner===self?'BẠN ĐÃ CHIẾN THẮNG':'TRẬN ĐẤU KHÉP LẠI';
     $('resultTitle').textContent=names[winner]+' chiến thắng';
     $('resultDetail').textContent='Tỉ số '+s.wins[0]+' – '+s.wins[1]+'. '+(winner===self?'Nhịp ra đòn rất tốt. Tiếp tục so tài?':'Giữ thể lực, chọn thời điểm và thử lại.');
-    $('resultOverlay').hidden=false;$('centerMessage').hidden=true;$('pauseBtn').hidden=true;
+    $('resultOverlay').hidden=false;$('centerMessage').hidden=true;$('pauseBtn').hidden=true;if($('mobileGamepad'))$('mobileGamepad').hidden=true;
     if(selectedMode==='online')setTimeout(()=>{RoosterProfile.refresh().then(()=>{profileState=RoosterProfile.state;updateProfileUI();}).catch(()=>{});},1800);
   }
   function updateHUD() {
@@ -450,7 +453,7 @@
   }
   function markDisconnected(message) {
     if(disconnected)return;
-    disconnected=true;playing=false;releaseKeys();
+    disconnected=true;playing=false;releaseKeys();if($('mobileGamepad'))$('mobileGamepad').hidden=true;
     $('roomRoster').hidden=true;$('roomCard').hidden=true;$('roomActions').hidden=true;$('leaveBtn').hidden=false;
     $('centerMessage').hidden=true;$('splash').hidden=true;$('pauseBtn').hidden=true;
     $('resultKicker').textContent='KẾT NỐI ĐÃ DỪNG';
@@ -544,16 +547,37 @@
     try{await current.create(playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId,matchMode:currentPowerMode()});}
     catch(error){if(current===net){$('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');}}
   }
-  async function joinRoom(event){
-    event.preventDefault();
-    if(!loaded){toast('Chờ hình ảnh tải xong rồi vào phòng.');return;}
-    const code=$('roomInput').value.trim().toUpperCase();
-    if(!RoosterNet.validCode(code)){toast('Nhập đúng mã phòng 6 ký tự.');return;}
+  async function joinRoomCode(code,auto=false){
+    code=String(code||'').trim().toUpperCase();
+    if(!loaded){if(!auto)toast('Chờ hình ảnh tải xong rồi vào phòng.');return false;}
+    if(!RoosterNet.validCode(code)){if(!auto)toast('Nhập đúng mã phòng 6 ký tự.');return false;}
     playing=false;disconnected=false;resetVisuals();releaseKeys();$('splash').hidden=false;$('sceneLabel').hidden=false;
+    if(auto){
+      $('roomEntry').hidden=true;
+      $('networkStatus').textContent='Đang tự động vào phòng '+code+' từ link mời…';
+      $('networkStatus').classList.remove('error');
+    }
     const identity=await profileIdentity();
     const current=createNetwork();
-    try{await current.join(code,playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId});}
-    catch(error){if(current===net){$('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');}}
+    try{
+      await current.join(code,playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId});
+      return true;
+    }catch(error){
+      if(current===net){
+        $('networkStatus').textContent=error.message;$('networkStatus').classList.add('error');
+        if(auto){$('roomEntry').hidden=false;$('roomInput').value=code;}
+      }
+      return false;
+    }
+  }
+  async function joinRoom(event){
+    event.preventDefault();
+    return joinRoomCode($('roomInput').value,false);
+  }
+  function maybeAutoJoinInvite(){
+    if(inviteAutoJoinStarted||!loaded||!RoosterNet.validCode(invitedCode))return;
+    inviteAutoJoinStarted=true;
+    joinRoomCode(invitedCode,true);
   }
   function startRematch(){
     beginGame(selectedMode);
@@ -846,18 +870,18 @@
     document.fonts.load('italic 400 16px "Noto Sans Game"', 'Bản lĩnh trong từng nhịp cánh')
   ]).then(()=>{
     loaded=true;$('loading').hidden=true;$('startBtn').disabled=false;$('startBtn').textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →';
-    setRoles();updateHUD();
+    setRoles();updateHUD();maybeAutoJoinInvite();
   }).catch(()=>{
     $('loading').textContent='Không đọc được hình ảnh hoặc font chữ. Hãy tải lại file HTML đầy đủ rồi mở lại.';
   });
   try{$('playerName').value=localStorage.getItem('rooster-player-name')||'';}catch(_){}
-  const invitedCode=new URLSearchParams(location.search).get('room');
-  selectMode(invitedCode&&RoosterNet.validCode(invitedCode)?'online':'training');
-  if(invitedCode&&RoosterNet.validCode(invitedCode)){
-    $('roomInput').value=invitedCode.toUpperCase();
-    $('networkStatus').textContent='Bạn được mời vào phòng '+invitedCode.toUpperCase()+'. Nhập tên rồi bấm Vào.';
+  selectMode(RoosterNet.validCode(invitedCode)?'online':'training');
+  if(RoosterNet.validCode(invitedCode)){
+    $('roomInput').value=invitedCode;
+    $('roomEntry').hidden=true;
+    $('networkStatus').textContent='Link mời hợp lệ · đang chuẩn bị vào phòng '+invitedCode+'…';
   }
-  ensureProfile().then(()=>{profileState=RoosterProfile.state;updateProfileUI();setRoles();}).catch(()=>{});
+  ensureProfile().then(()=>{profileState=RoosterProfile.state;updateProfileUI();setRoles();maybeAutoJoinInvite();}).catch(()=>{maybeAutoJoinInvite();});
   updateTrainingUI();setRoles();setupTouchControls();
   setInterval(tick,1000/60);requestAnimationFrame(render);
 })();
