@@ -33,3 +33,12 @@ test('active match always exposes a mobile exit button back to lobby',async()=>{
   assert.ok(app.includes("if($('exitMatchBtn'))$('exitMatchBtn').hidden=false"));
   assert.ok(app.includes("$('exitMatchBtn').addEventListener('click',()=>lobby())"));
 });
+
+
+test('result return button closes overlay immediately and supports touch pointerup',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes("function returnToLobby(event)"));
+  assert.ok(app.includes("$('resultOverlay').hidden=true;resultShown=false;playing=false;paused=false"));
+  assert.ok(app.includes("$('returnBtn').addEventListener('pointerup'"));
+  assert.ok(app.includes("returnToLobby(event)"));
+});
