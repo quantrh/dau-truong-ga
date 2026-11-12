@@ -2072,6 +2072,8 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
     $('networkStatus').classList.remove('error');
   }
   function lobby() {
+    // Close result UI first so returning to the lobby is immediate even if later reset work fails.
+    $('resultOverlay').hidden=true;resultShown=false;
     releaseKeys();closeNet();playing=false;paused=false;disconnected=false;document.body.classList.remove('combat-active');
     applyLocalPowerRules(selectedMode);game.reset(selectedMode);resetVisuals();setRoles();
     $('splash').hidden=false;$('sceneLabel').hidden=false;$('centerMessage').hidden=true;
@@ -2660,7 +2662,19 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
     try{await navigator.clipboard.writeText(shareURL());toast('Đã sao chép link. Gửi cho bạn để vào đúng phòng.');}
     catch(_){toast('Không chép được link. Hãy dùng nút Chép mã và gửi cùng địa chỉ trò chơi.');}
   });
-  $('returnBtn').addEventListener('click',lobby);
+  function returnToLobby(event){
+    if(event)event.preventDefault();
+    $('resultOverlay').hidden=true;resultShown=false;playing=false;paused=false;
+    lobby();
+  }
+  $('returnBtn').addEventListener('pointerup',event=>{
+    if(event.pointerType!=='touch'&&event.pointerType!=='pen')return;
+    returnToLobby(event);
+  });
+  $('returnBtn').addEventListener('click',event=>{
+    if($('resultOverlay').hidden)return;
+    returnToLobby(event);
+  });
   $('rematchBtn').addEventListener('click',requestRematch);
   $('pauseBtn').addEventListener('click',()=>togglePause());
   $('exitMatchBtn').addEventListener('click',()=>lobby());
