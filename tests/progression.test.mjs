@@ -15,16 +15,20 @@ test('balanced mode neutralizes accumulated power',()=>{
   assert.deepEqual(P.matchRules('balanced',{hen:100},{grain:1000}),{powerMode:'balanced',powerRatings:[100,100]});
 });
 
-test('progression mode increases damage but remains capped',()=>{
-  const g=new Game({mode:'local'});
-  g.setMatchRules({powerMode:'progression',powerRatings:[130,100]});
-  g.state.phase='fight'; g.state.roundTime=75;
-  const a=g.state.fighters[0],b=g.state.fighters[1];
-  a.x=500;b.x=620;a.facing=1;b.facing=-1;
-  a.attackType='peck';a.attackTimer=Game.ATTACKS.peck.start;a.attackConnected=false;
-  const hp=b.hp;g.step(1/60,[{},{}]);
-  assert.ok(b.hp<hp-Game.ATTACKS.peck.damage);
-  assert.equal(a.powerRating,130);
+test('progression mode increases damage at the same contact distance but remains capped',()=>{
+  function damage(power){
+    const g=new Game({mode:'local'});
+    g.setMatchRules({powerMode:'progression',powerRatings:[power,100]});
+    g.state.phase='fight';g.state.roundTime=75;
+    const a=g.state.fighters[0],b=g.state.fighters[1];
+    a.x=500;b.x=620;a.facing=1;b.facing=-1;
+    const hp=b.hp;
+    g._hit({a,b,attack:Game.ATTACKS.peck,kind:'peck'});
+    return {damage:hp-b.hp,power:a.powerRating};
+  }
+  const normal=damage(100),boosted=damage(130);
+  assert.ok(boosted.damage>normal.damage);
+  assert.equal(boosted.power,130);
 });
 
 test('airborne peck and kick are distinct stronger attacks',()=>{
