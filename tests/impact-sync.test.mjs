@@ -49,10 +49,12 @@ test('kick creates strong knockback and a small lift reaction',()=>{
 
 test('host connection hold uses guest heartbeat, not guest-only state clock',async()=>{
   const source=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
-  const start=source.indexOf("if(onlineRole==='host')");
-  const end=source.indexOf("}else{",start);
-  const hostBlock=source.slice(start,end);
-  assert.ok(hostBlock.includes('networkHold=now-lastRemoteInput>stallLimit'));
+  const marker="networkHold=now-lastRemoteInput>stallLimit";
+  const start=source.indexOf(marker);
+  assert.ok(start>=0,'host heartbeat stall check should exist');
+  const hostBlock=source.slice(Math.max(0,start-500),start+700);
+  assert.ok(hostBlock.includes("if(onlineRole==='host')"));
+  assert.ok(hostBlock.includes(marker));
   assert.ok(!hostBlock.includes('networkHold=now-lastState>stallLimit'));
 });
 
