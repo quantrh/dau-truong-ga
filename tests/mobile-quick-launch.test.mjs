@@ -55,3 +55,13 @@ test('computer mode uses deliberately easier AI',async()=>{
   assert.ok(engine.includes("const guardChance = easy ? 0.10 : hard ? 0.83 : 0.58"));
   assert.ok(engine.includes("roll < (easy ? 0.18 : hard ? 0.6 : 0.46)"));
 });
+
+
+test('online room creation survives profile failures',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes('function fallbackIdentity()'));
+  assert.ok(app.includes("Promise.race([ensureProfile(),timeout])"));
+  assert.ok(app.includes("catch(_){\n      return fallback;"));
+  assert.ok(app.includes("let current=null;\n    try{\n      const identity=await profileIdentity();"));
+  assert.ok(app.includes("onlineAutoCreating=false;"));
+});
