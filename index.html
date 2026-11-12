@@ -205,7 +205,7 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
 <div class="app">
   <header class="topbar">
     <a class="brand" href="#" aria-label="Đấu Trường Gà — trang chủ"><span class="brandmark">G<span>→</span></span><span>ĐẤU TRƯỜNG <b>GÀ</b><small>CHẠM CÁNH, SO TÀI</small></span></a>
-    <div class="header-right"><span class="edition"><i></i> ONLINE 3.2.8 · SUPABASE</span><button id="soundBtn" class="iconbtn" title="Bật âm thanh" aria-label="Bật âm thanh" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M11 4 5 9H2v6h3l6 5z"/><path id="soundWaves" d="m16 9 6 6m0-6-6 6"/></svg></button><button id="helpBtn" class="iconbtn" title="Cách chơi" aria-label="Cách chơi">?</button><button id="fullscreenBtn" class="iconbtn" title="Toàn màn hình" aria-label="Toàn màn hình"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
+    <div class="header-right"><span class="edition"><i></i> ONLINE 3.2.9 · SUPABASE</span><button id="soundBtn" class="iconbtn" title="Bật âm thanh" aria-label="Bật âm thanh" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M11 4 5 9H2v6h3l6 5z"/><path id="soundWaves" d="m16 9 6 6m0-6-6 6"/></svg></button><button id="helpBtn" class="iconbtn" title="Cách chơi" aria-label="Cách chơi">?</button><button id="fullscreenBtn" class="iconbtn" title="Toàn màn hình" aria-label="Toàn màn hình"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
   </header>
   <section class="intro"><div><p class="eyebrow">SÂN ĐẤU LÀNG QUÊ</p><h1>Bản lĩnh <em>trong từng nhịp cánh.</em></h1></div><p class="intro-note">Chọn đối thủ. Giữ nhịp ra đòn.<br>Thắng 2 hiệp để trở thành nhà vô địch.</p></section>
   <main class="main-grid">
@@ -1847,7 +1847,7 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
       const time = audio.currentTime;
       oscillator.type = type || 'sine';
       oscillator.frequency.setValueAtTime(freq, time);
-      if (endFreq) oscillator.frequency.exponentialRampToValueAtTime(endFreq, time + duration);
+      if (endFreq) oscillator.frequency.exponentialRampToValueAtTime(Math.max(1,endFreq), time + duration);
       volume.gain.setValueAtTime(0, time);
       volume.gain.linearRampToValueAtTime(gain, time + .008);
       volume.gain.exponentialRampToValueAtTime(.001, time + duration);
@@ -1855,10 +1855,53 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
       oscillator.start(time); oscillator.stop(time + duration + .02);
     } catch (_) {}
   }
+  function noiseBurst(duration=.06,gain=.02,highpass=900){
+    if(isMuted||!audio||audio.state!=='running')return;
+    try{
+      const frames=Math.max(1,Math.floor(audio.sampleRate*duration));
+      const buffer=audio.createBuffer(1,frames,audio.sampleRate),data=buffer.getChannelData(0);
+      for(let i=0;i<frames;i++)data[i]=(Math.random()*2-1)*(1-i/frames);
+      const source=audio.createBufferSource(),filter=audio.createBiquadFilter(),volume=audio.createGain();
+      filter.type='highpass';filter.frequency.value=highpass;
+      volume.gain.setValueAtTime(gain,audio.currentTime);volume.gain.exponentialRampToValueAtTime(.001,audio.currentTime+duration);
+      source.buffer=buffer;source.connect(filter);filter.connect(volume);volume.connect(audio.destination);source.start();
+    }catch(_){}
+  }
+  function missSound(kind){
+    if(kind==='kick'){noiseBurst(.11,.035,700);tone(180,.11,.025,'sawtooth',80);}
+    else{noiseBurst(.07,.022,1200);tone(340,.07,.018,'triangle',190);}
+  }
+  function impactSound(event){
+    const damage=Math.max(0,Number(event&&event.damage)||0),kind=event&&event.kind==='kick'?'kick':'peck';
+    const heavy=damage>=18,medium=damage>=10;
+    if(kind==='kick'){
+      if(heavy){tone(92,.18,.16,'triangle',42);tone(210,.07,.055,'sawtooth',70);noiseBurst(.09,.05,350);}
+      else if(medium){tone(118,.14,.11,'triangle',55);tone(260,.055,.035,'sawtooth',100);noiseBurst(.065,.032,500);}
+      else{tone(155,.10,.075,'triangle',82);noiseBurst(.045,.02,800);}
+    }else{
+      if(heavy){tone(150,.12,.11,'triangle',68);tone(410,.04,.035,'square',180);noiseBurst(.055,.028,900);}
+      else if(medium){tone(190,.10,.08,'triangle',95);tone(470,.035,.025,'square',220);noiseBurst(.04,.02,1100);}
+      else{tone(245,.075,.055,'triangle',140);noiseBurst(.03,.014,1400);}
+    }
+    // Short hurt cry: heavier damage produces a lower, rougher vocal response.
+    if(heavy){setTimeout(()=>{tone(kind==='kick'?235:285,.16,.045,'sawtooth',125);tone(kind==='kick'?330:390,.11,.02,'triangle',170);},20);}
+    else if(medium){setTimeout(()=>tone(kind==='kick'?310:370,.11,.03,'sawtooth',190),18);}
+    else setTimeout(()=>tone(kind==='kick'?410:465,.075,.018,'triangle',300),14);
+  }
+  function scheduleMiss(event){
+    const fighter=Number(event&&event.fighter),kind=event&&event.kind==='kick'?'kick':'peck';
+    if(!Number.isFinite(fighter))return;
+    const old=pendingAttackAudio.get(fighter);if(old)clearTimeout(old.timer);
+    const timer=setTimeout(()=>{const pending=pendingAttackAudio.get(fighter);if(pending&&pending.kind===kind){pendingAttackAudio.delete(fighter);missSound(kind);}},kind==='kick'?320:210);
+    pendingAttackAudio.set(fighter,{kind,timer});
+  }
+  function resolveAttackAudio(event){
+    const fighter=Number(event&&event.fighter),pending=pendingAttackAudio.get(fighter);
+    if(pending){clearTimeout(pending.timer);pendingAttackAudio.delete(fighter);}
+    impactSound(event);
+  }
   function sound(event) {
-    if (event === 'hit') { tone(130,.12,.13,'triangle',44); tone(290,.045,.045,'sawtooth',110); }
-    else if (event === 'block') tone(640,.07,.035,'triangle',320);
-    else if (event === 'attack') tone(160,.075,.018,'sine',330);
+    if (event === 'block') { tone(720,.07,.035,'triangle',310); noiseBurst(.035,.018,1800); }
     else if (event === 'jump') tone(180,.15,.02,'sine',410);
     else if (event === 'count') tone(510,.09,.04,'sine');
     else if (event === 'start') tone(780,.22,.05,'sine',1050);
@@ -1886,7 +1929,7 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
       if (e.type==='hit'||e.type==='block'||e.type==='guardBreak') {
         const x=Number.isFinite(e.x)?e.x:640, y=580-(Number.isFinite(e.y)?e.y:100);
         particlesAt(x,y,e.type==='hit'?18:11,e.type==='block'?'block':'hit');
-        sound(e.type==='block'?'block':'hit');
+        if(e.type==='block')sound('block');else resolveAttackAudio(e);
         if (!reduced) shake=e.type==='hit'?(e.kind==='kick'?(e.aerial?8:6.5):(e.aerial?4:3.2)):1.4;
         floating.push({x,y:y-35,life:.75,text:e.type==='guardBreak'?'VỠ THẾ THỦ':e.type==='block'?'ĐỠ':(e.aerial?'TRÚNG TRÊN KHÔNG · ':'')+Math.round(e.damage||0),color:e.type==='block'?'#e9f4d1':'#fff0bc'});
       } else if (e.type==='dash') {
@@ -1895,7 +1938,7 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
       } else if (e.type==='jump'||e.type==='land') {
         particlesAt(Number.isFinite(e.x)?e.x:640,580,11,'dust');
         if(e.type==='jump')sound('jump');
-      } else if(e.type==='attack') sound('attack');
+      } else if(e.type==='attack') scheduleMiss(e);
       else if(e.type==='roundStart') sound('start');
       else if(e.type==='matchEnd') sound('win');
     });
@@ -1904,6 +1947,7 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
     visual=game.state.fighters.map(f=>({x:f.x,y:f.y,lean:0,squash:0,foot:-1,lunge:0}));
     particles=[];floating=[];shake=0;seenEvent=0;activeCountdown=-1;hudState='';
     resultShown=false;rematchWanted=false;remoteRematchWanted=false;
+    pendingAttackAudio.forEach(v=>clearTimeout(v.timer));pendingAttackAudio.clear();
     $('resultOverlay').hidden=true;$('rematchBtn').disabled=false;
     $('rematchBtn').textContent='Đấu lại ↻';
   }
