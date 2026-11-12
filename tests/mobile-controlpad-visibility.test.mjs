@@ -7,7 +7,7 @@ test('mobile combat pad stays fixed and visible above browser chrome',async()=>{
   const arena=shell.indexOf('id="arena"');
   const pad=shell.indexOf('id="mobileGamepad"');
   assert.ok(arena>=0&&pad>arena);
-  assert.ok(shell.includes('.combat-active .mobile-gamepad:not([hidden]){position:fixed'));
+  assert.ok(shell.includes('.combat-active .mobile-gamepad{position:fixed'));
   assert.ok(shell.includes('bottom:0;z-index:40'));
 });
 
