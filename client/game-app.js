@@ -326,7 +326,7 @@
     if(old)old.close();
     document.querySelector('.lobby').classList.remove('in-room');$('lobbyTitle').textContent='CHỌN CÁCH CHƠI';
     onlineRole=null;remoteInput=empty();lastRemoteInput=0;roomRoster=null;networkHold=false;remoteFocused=true;remoteHostPaused=false;clearRemoteActions();
-    $('roomCard').hidden=true;$('leaveBtn').hidden=true;$('roomRoster').hidden=true;$('playerName').disabled=false;
+    $('roomCard').hidden=true;$('leaveBtn').hidden=true;$('roomRoster').hidden=true;$('roomEntry').hidden=false;$('playerName').disabled=false;
     $('createBtn').disabled=false;$('joinBtn').disabled=false;$('roomInput').disabled=false;
     if($('powerMode'))$('powerMode').disabled=false;
     $('networkStatus').textContent='Tạo phòng hoặc nhập mã để kết nối.';
