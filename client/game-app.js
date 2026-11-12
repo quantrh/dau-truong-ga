@@ -495,7 +495,7 @@
     $('footerState').textContent=mode==='training'?'TẬP TỰ DO · THỂ LỰC VÔ HẠN':mode==='online'?'MỖI NGƯỜI ĐIỀU KHIỂN MỘT CON GÀ':'ESC / P ĐỂ TẠM DỪNG';
     if(mode==='training')resetTrainingProgress();
     setRoles();unlockAudio();updateHUD();
-    const focusTarget=$('mobileGamepad')&&!$('mobileGamepad').hidden?$('gameColumn')||$('arena'):$('arena');
+    const focusTarget=$('mobileGamepad')&&!$('mobileGamepad').hidden?document.querySelector('.arena-panel'):$('arena');
     requestAnimationFrame(()=>focusTarget.scrollIntoView({behavior:'smooth',block:'start'}));
   }
   function showCenter(kicker,title,detail) {
