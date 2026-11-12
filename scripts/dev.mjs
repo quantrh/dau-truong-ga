@@ -37,7 +37,7 @@ const server = http.createServer(async (req, res) => {
       for await (const chunk of req) { size += chunk.length; if (size > 32768) { res.writeHead(413); res.end(); return; } chunks.push(chunk); }
       const body = Buffer.concat(chunks);
       const request = new Request(url, { method: req.method, headers: req.headers, ...(!['GET', 'HEAD'].includes(req.method) ? { body, duplex: 'half' } : {}) });
-      if (url.pathname === '/api/health') response = Response.json({ ok: true, version: '3.2.9', preview: true });
+      if (url.pathname === '/api/health') response = Response.json({ ok: true, version: '3.3.0', preview: true });
       else response = await handleRoomRequest(request, { DB }, { waitUntil: p => p.catch(() => {}) });
     } else if (url.pathname.startsWith('/assets/')) {
       const name = url.pathname.slice(8);

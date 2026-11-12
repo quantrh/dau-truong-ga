@@ -905,6 +905,16 @@
     $('settingsMenu').open=true;
     $('settingsMenu').scrollIntoView({behavior:'smooth',block:'start'});
   });
+  function showMobileGuide(section){
+    const dialog=$('mobileGuideDialog');if(!dialog)return;
+    const titles={play:'Cách chơi',setup:'Setup sân',invite:'Mời bạn'};
+    $('mobileGuideTitle').textContent=titles[section]||'Hướng dẫn nhanh';
+    dialog.querySelectorAll('[data-guide-section]').forEach(el=>el.hidden=el.dataset.guideSection!==section);
+    dialog.showModal();
+  }
+  document.querySelectorAll('[data-mobile-guide]').forEach(button=>button.addEventListener('click',()=>showMobileGuide(button.dataset.mobileGuide)));
+  $('closeMobileGuide').addEventListener('click',()=>$('mobileGuideDialog').close());
+  $('mobileGuideDialog').addEventListener('click',e=>{if(e.target===$('mobileGuideDialog'))e.target.close();});
   $('powerMode').addEventListener('change',()=>{applyLocalPowerRules(selectedMode);updatePowerModeHint();});
   $('saveRoosterName').addEventListener('click',async()=>{
     try{await ensureProfile();const r=await RoosterProfile.rename($('roosterName').value);profileState=RoosterProfile.state;updateProfileUI();toast('Đã lưu tên chiến kê: '+r.name+'.');}
