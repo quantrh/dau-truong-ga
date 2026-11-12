@@ -415,7 +415,7 @@
     releaseKeys();closeNet();playing=false;paused=false;disconnected=false;document.body.classList.remove('combat-active');
     applyLocalPowerRules(selectedMode);game.reset(selectedMode);resetVisuals();setRoles();
     $('splash').hidden=false;$('sceneLabel').hidden=false;$('centerMessage').hidden=true;
-    $('pauseBtn').hidden=true;if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;
+    $('pauseBtn').hidden=true;if($('exitMatchBtn'))$('exitMatchBtn').hidden=true;if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;
     const training=selectedMode==='training';
     $('arenaHint').textContent=training?'A/D di chuyển · Space nhảy · J/K ra đòn · L thủ · Shift trái lướt':'Sẵn sàng cho trận đấu đầu tiên?';
     $('footerState').textContent=training?'TẬP TỰ DO · THỂ LỰC VÔ HẠN':'TẠO PHÒNG · MỜI BẠN · VÀO SÂN';
@@ -488,7 +488,7 @@
     lastStateSeq=-1;lastInputSeq=-1;stateClock=0;inputClock=0;
     $('splash').hidden=true;$('sceneLabel').hidden=true;
     $('pauseBtn').hidden=mode==='online';
-    if($('mobileGamepad'))$('mobileGamepad').hidden=false;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=true;
+    if($('mobileGamepad'))$('mobileGamepad').hidden=false;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=true;if($('exitMatchBtn'))$('exitMatchBtn').hidden=false;
     $('pauseBtn').textContent='II';
     $('startBtn').textContent=mode==='training'?'TẬP LẠI TỪ ĐẦU ↻':'CHƠI LẠI TỪ ĐẦU ↻';
     updateControlLabels();
@@ -521,7 +521,7 @@
     $('resultKicker').textContent=selectedMode==='local'?'NHÀ VÔ ĐỊCH SÂN ĐẤU':winner===self?'BẠN ĐÃ CHIẾN THẮNG':'TRẬN ĐẤU KHÉP LẠI';
     $('resultTitle').textContent=names[winner]+' chiến thắng';
     $('resultDetail').textContent='Tỉ số '+s.wins[0]+' – '+s.wins[1]+'. '+(winner===self?'Nhịp ra đòn rất tốt. Tiếp tục so tài?':'Giữ thể lực, chọn thời điểm và thử lại.');
-    $('resultOverlay').hidden=false;$('centerMessage').hidden=true;$('pauseBtn').hidden=true;if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;document.body.classList.remove('combat-active');syncMobileQuickAction();
+    $('resultOverlay').hidden=false;$('centerMessage').hidden=true;$('pauseBtn').hidden=true;if($('exitMatchBtn'))$('exitMatchBtn').hidden=true;if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;document.body.classList.remove('combat-active');syncMobileQuickAction();
     if(selectedMode==='online')setTimeout(()=>{RoosterProfile.refresh().then(()=>{profileState=RoosterProfile.state;updateProfileUI();}).catch(()=>{});},1800);
   }
   function updateHUD() {
@@ -571,7 +571,7 @@
   }
   function markDisconnected(message) {
     if(disconnected)return;
-    disconnected=true;playing=false;releaseKeys();if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;document.body.classList.remove('combat-active');syncMobileQuickAction();
+    disconnected=true;playing=false;releaseKeys();if($('exitMatchBtn'))$('exitMatchBtn').hidden=true;if($('mobileGamepad'))$('mobileGamepad').hidden=true;if($('mobileQuickLaunch'))$('mobileQuickLaunch').hidden=false;document.body.classList.remove('combat-active');syncMobileQuickAction();
     $('roomRoster').hidden=true;$('roomCard').hidden=true;$('roomActions').hidden=true;$('leaveBtn').hidden=false;
     $('centerMessage').hidden=true;$('splash').hidden=true;$('pauseBtn').hidden=true;
     $('resultKicker').textContent='KẾT NỐI ĐÃ DỪNG';
@@ -1003,6 +1003,7 @@
   $('returnBtn').addEventListener('click',lobby);
   $('rematchBtn').addEventListener('click',requestRematch);
   $('pauseBtn').addEventListener('click',()=>togglePause());
+  $('exitMatchBtn').addEventListener('click',()=>lobby());
   $('copyBtn').addEventListener('click',async()=>{
     const code=$('roomCode').textContent;
     try{
