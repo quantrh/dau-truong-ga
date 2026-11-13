@@ -2591,38 +2591,61 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
     return net;
   }
   async function hostRoom(){
-    if(!loaded||onlineAutoCreating||net||roomRoster)return;
-    onlineAutoCreating=true;syncMobileQuickAction();
-    playing=false;disconnected=false;resetVisuals();releaseKeys();$('splash').hidden=false;$('sceneLabel').hidden=false;
-    $('networkStatus').textContent='Đang mở phòng trực tiếp…';$('networkStatus').classList.remove('error');
+    if(!loaded||onlineAutoCreating||roomRoster)return;
+    onlineAutoCreating=true;
+    playing=false;disconnected=false;
+    $('networkStatus').textContent='Đang kết nối máy chủ phòng…';$('networkStatus').classList.remove('error');
+    syncMobileQuickAction();
+
     const identity=fallbackIdentity();
-    let current=null;
+    const withTimeout=(promise,ms,label)=>Promise.race([
+      promise,
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error(label)),ms))
+    ]);
+
+    let success=false;
+    let lastError=null;
     try{
-      current=createDirectNetwork();
-      await current.create(playerName(),{
-        roosterName:identity.roosterName,
-        powerRating:identity.powerRating,
-        matchMode:currentPowerMode()
-      });
-      return;
-    }catch(peerError){
+      // Primary path: hosted room worker. It explicitly allows quantrh.github.io via CORS.
+      let current=createNetwork();
+      onlineAutoCreating=true;syncMobileQuickAction();
       try{
-        $('networkStatus').textContent='P2P không phản hồi · đang thử máy chủ phòng…';$('networkStatus').classList.remove('error');
-        current=createNetwork();
-        await current.create(playerName(),{
+        await withTimeout(current.create(playerName(),{
           accessToken:identity.accessToken,
           roosterId:identity.roosterId,
           matchMode:currentPowerMode()
-        });
+        }),6500,'Máy chủ phòng không phản hồi.');
+        success=true;
         return;
-      }catch(relayError){
-        onlineAutoCreating=false;
-        closeNet();
-        $('networkStatus').textContent=(relayError&&relayError.message?relayError.message:(peerError&&peerError.message?peerError.message:'Không tạo được phòng.'))+' Chạm nút bên dưới để thử lại.';
-        $('networkStatus').classList.add('error');
-        syncMobileQuickAction();
-        if($('mobilePrimaryBtn')){$('mobilePrimaryBtn').textContent='THỬ TẠO PHÒNG LẠI →';$('mobilePrimaryBtn').disabled=false;}
+      }catch(error){
+        lastError=error;
       }
+
+      // Fallback: direct PeerJS room.
+      $('networkStatus').textContent='Máy chủ chậm · đang thử kết nối trực tiếp…';$('networkStatus').classList.remove('error');
+      current=createDirectNetwork();
+      onlineAutoCreating=true;syncMobileQuickAction();
+      try{
+        await withTimeout(current.create(playerName(),{
+          roosterName:identity.roosterName,
+          powerRating:identity.powerRating,
+          matchMode:currentPowerMode()
+        }),7500,'Kết nối trực tiếp không phản hồi.');
+        success=true;
+        return;
+      }catch(error){
+        lastError=error;
+      }
+    }catch(error){
+      lastError=error;
+    }finally{
+      onlineAutoCreating=false;
+      if(!success&&!roomRoster){
+        closeNet();
+        $('networkStatus').textContent=(lastError&&lastError.message?lastError.message:'Không tạo được phòng.')+' Bấm thử lại.';
+        $('networkStatus').classList.add('error');
+      }
+      syncMobileQuickAction();
     }
   }
   function maybeAutoHostOnline(){
