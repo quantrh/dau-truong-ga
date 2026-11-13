@@ -22,7 +22,7 @@ test('verbose mobile lobby content is hidden in favor of quick launch',async()=>
 test('mobile primary action changes with local and online state',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   assert.ok(app.includes("btn.textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →'"));
-  assert.ok(app.includes("btn.textContent=onlineAutoCreating?'ĐANG TẠO PHÒNG…':'ĐANG CHUẨN BỊ PHÒNG…'"));
+  assert.ok(app.includes("btn.textContent=onlineAutoCreating?'ĐANG TẠO PHÒNG…':'THỬ TẠO PHÒNG →'"));
   assert.ok(app.includes("btn.textContent='CHIA SẺ LỜI MỜI →'"));
   assert.ok(app.includes("btn.textContent='TÔI ĐÃ SẴN SÀNG →'"));
   assert.ok(app.includes("btn.textContent=canStart?'BẮT ĐẦU ONLINE →':'CHỜ ĐỐI THỦ SẴN SÀNG'"));
@@ -62,21 +62,22 @@ test('online room creation survives profile failures',async()=>{
   assert.ok(app.includes('function fallbackIdentity()'));
   assert.ok(app.includes("Promise.race([ensureProfile(),timeout])"));
   assert.ok(app.includes("catch(_){\n      return fallback;"));
-  assert.ok(app.includes("const identity=fallbackIdentity();\n      current=createNetwork();"));
+  assert.ok(app.includes("const identity=fallbackIdentity();\n    let current=null;\n    try{\n      current=createDirectNetwork();"));
   assert.ok(app.includes("onlineAutoCreating=false;"));
 });
 
 
 test('online host creation bypasses profile loading entirely',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
-  assert.ok(app.includes("const identity=fallbackIdentity();\n      current=createNetwork();\n      await current.create"));
+  assert.ok(app.includes("const identity=fallbackIdentity();\n    let current=null;\n    try{\n      current=createDirectNetwork();"));
+  assert.ok(app.includes("current=createNetwork();\n        await current.create"));
   assert.ok(app.includes("current=invitedTransport==='peer'?createDirectNetwork():createNetwork()"));
   assert.ok(app.includes("requestTimeout:5000"));
   assert.ok(app.includes("THỬ TẠO PHÒNG LẠI →"));
 });
 
 
-test('online falls back to direct PeerJS rooms when relay is unreachable',async()=>{
+test('online prefers direct PeerJS rooms and keeps relay as fallback',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   const peer=await readFile(new URL('../client/direct-peer-room.js',import.meta.url),'utf8');
   const content=await readFile(new URL('../scripts/content.mjs',import.meta.url),'utf8');
@@ -86,4 +87,12 @@ test('online falls back to direct PeerJS rooms when relay is unreachable',async(
   assert.ok(app.includes("invitedTransport==='peer'?createDirectNetwork():createNetwork()"));
   assert.ok(peer.includes("root.DirectPeerRoom=DirectPeerRoom"));
   assert.ok(peer.includes("host:'0.peerjs.com'"));
+});
+
+
+test('online selection hides settings and lobby clutter',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes("$('settingsMenu').hidden=mode==='online'"));
+  assert.ok(app.includes("if(lobbyTip)lobbyTip.hidden=mode==='online'"));
+  assert.ok(app.includes("if(lobbyFooter)lobbyFooter.hidden=mode==='online'"));
 });
