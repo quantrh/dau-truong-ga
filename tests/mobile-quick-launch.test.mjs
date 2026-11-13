@@ -77,7 +77,7 @@ test('online host creation bypasses profile loading entirely',async()=>{
 });
 
 
-test('online prefers direct PeerJS rooms and keeps relay as fallback',async()=>{
+test('online prefers direct PeerJS rooms and keeps Supabase as fallback',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   const peer=await readFile(new URL('../client/direct-peer-room.js',import.meta.url),'utf8');
   const content=await readFile(new URL('../scripts/content.mjs',import.meta.url),'utf8');
@@ -104,4 +104,11 @@ test('online room creation always releases the busy state',async()=>{
   assert.ok(app.includes("6500,'Máy chủ phòng không phản hồi.'"));
   assert.ok(app.includes("7500,'Kết nối trực tiếp không phản hồi.'"));
   assert.ok(app.includes("Máy chủ chậm · đang thử kết nối trực tiếp…"));
+});
+
+
+test('production config no longer references deprecated chatgpt.site',async()=>{
+  const content=await readFile(new URL('../scripts/content.mjs',import.meta.url),'utf8');
+  assert.ok(!content.includes('dau-truong-ga-quan.bidv-it-grou-8424.chatgpt.site'));
+  assert.ok(content.includes("window.ROOSTER_ONLINE_API=${JSON.stringify(SUPABASE_ROOM_API)}"));
 });
