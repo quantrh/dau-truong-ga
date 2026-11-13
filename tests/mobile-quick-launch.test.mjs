@@ -62,7 +62,7 @@ test('online room creation survives profile failures',async()=>{
   assert.ok(app.includes('function fallbackIdentity()'));
   assert.ok(app.includes("Promise.race([ensureProfile(),timeout])"));
   assert.ok(app.includes("catch(_){\n      return fallback;"));
-  assert.ok(app.includes("const identity=fallbackIdentity();\n    let current=null;\n    try{\n      current=createDirectNetwork();"));
+  assert.ok(app.includes("const identity=fallbackIdentity();\n    const withTimeout="));
   assert.ok(app.includes("onlineAutoCreating=false;"));
 });
 
@@ -70,7 +70,7 @@ test('online room creation survives profile failures',async()=>{
 test('online host creation bypasses profile loading entirely',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   assert.ok(app.includes("const identity=fallbackIdentity();\n    let current=null;\n    try{\n      current=createDirectNetwork();"));
-  assert.ok(app.includes("current=createNetwork();\n        await current.create"));
+  assert.ok(app.includes("let current=createNetwork();"));
   assert.ok(app.includes("current=invitedTransport==='peer'?createDirectNetwork():createNetwork()"));
   assert.ok(app.includes("requestTimeout:5000"));
   assert.ok(app.includes("THỬ TẠO PHÒNG LẠI →"));
@@ -82,7 +82,7 @@ test('online prefers direct PeerJS rooms and keeps relay as fallback',async()=>{
   const peer=await readFile(new URL('../client/direct-peer-room.js',import.meta.url),'utf8');
   const content=await readFile(new URL('../scripts/content.mjs',import.meta.url),'utf8');
   assert.ok(content.includes("'direct-peer-room.js'"));
-  assert.ok(app.includes("current=createDirectNetwork()"));
+  assert.ok(app.includes("current=createDirectNetwork();"));
   assert.ok(app.includes("u.searchParams.set('transport','peer')"));
   assert.ok(app.includes("invitedTransport==='peer'?createDirectNetwork():createNetwork()"));
   assert.ok(peer.includes("root.DirectPeerRoom=DirectPeerRoom"));
@@ -95,4 +95,13 @@ test('online selection hides settings and lobby clutter',async()=>{
   assert.ok(app.includes("$('settingsMenu').hidden=mode==='online'"));
   assert.ok(app.includes("if(lobbyTip)lobbyTip.hidden=mode==='online'"));
   assert.ok(app.includes("if(lobbyFooter)lobbyFooter.hidden=mode==='online'"));
+});
+
+
+test('online room creation always releases the busy state',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes("}finally{\n      onlineAutoCreating=false;"));
+  assert.ok(app.includes("6500,'Máy chủ phòng không phản hồi.'"));
+  assert.ok(app.includes("7500,'Kết nối trực tiếp không phản hồi.'"));
+  assert.ok(app.includes("Máy chủ chậm · đang thử kết nối trực tiếp…"));
 });
