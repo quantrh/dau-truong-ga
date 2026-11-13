@@ -515,6 +515,7 @@
   }
   function beginGame(mode) {
     if(!loaded)return;
+    ensureRenderLoop();
     playing=true;paused=false;disconnected=false;keys.clear();document.body.classList.add('combat-active');
     game.setDifficulty(mode==='bot'?'easy':'normal');
     if(mode!=='online')applyLocalPowerRules(mode);
@@ -658,6 +659,7 @@
     const epoch=netEpoch;
     const options={
       requestTimeout:5000,
+      forceRelay:true,
       onStatus(status){
         if(epoch!==netEpoch)return;
         $('networkStatus').textContent=status.message;
@@ -1029,7 +1031,12 @@
       ctx.fillText(roomRoster?(index?(roomRoster.guest?roomRoster.guest.name:'Đang chờ bạn…'):roomRoster.host.name):(index?'GÀ TRẮNG':'GÀ ĐIỀU'),x,ground+45);ctx.restore();
     }
   }
-  let renderErrorLogged=false;
+  let renderErrorLogged=false,renderStarted=false;
+  function ensureRenderLoop(){
+    if(renderStarted)return;
+    renderStarted=true;
+    requestAnimationFrame(render);
+  }
   function render(now) {
     const dt=Math.min(.05,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
     try{
@@ -1297,5 +1304,5 @@
   }
   ensureProfile().then(()=>{profileState=RoosterProfile.state;updateProfileUI();setRoles();maybeAutoJoinInvite();}).catch(()=>{maybeAutoJoinInvite();});
   updateTrainingUI();setRoles();setupTouchControls();syncMobileQuickAction();
-  setInterval(tick,1000/60);requestAnimationFrame(render);
+  setInterval(tick,1000/60);ensureRenderLoop();
 })();
