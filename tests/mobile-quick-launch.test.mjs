@@ -70,8 +70,8 @@ test('online room creation survives profile failures',async()=>{
 test('online host creation bypasses profile loading entirely',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   assert.ok(app.includes("const identity=fallbackIdentity();\n    const withTimeout="));
-  assert.ok(app.includes("let current=createNetwork();"));
-  assert.ok(app.includes("current=createDirectNetwork();"));
+  assert.ok(app.includes("let current=createDirectNetwork();"));
+  assert.ok(app.includes("current=createNetwork();"));
   assert.ok(app.includes("requestTimeout:5000"));
   assert.ok(app.includes("THỬ TẠO PHÒNG →"));
 });
@@ -101,9 +101,9 @@ test('online selection hides settings and lobby clutter',async()=>{
 test('online room creation always releases the busy state',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   assert.ok(app.includes("}finally{\n      onlineAutoCreating=false;"));
-  assert.ok(app.includes("6500,'Máy chủ phòng không phản hồi.'"));
+  assert.ok(app.includes("6500,'Máy chủ dự phòng không phản hồi.'"));
   assert.ok(app.includes("7500,'Kết nối trực tiếp không phản hồi.'"));
-  assert.ok(app.includes("Máy chủ chậm · đang thử kết nối trực tiếp…"));
+  assert.ok(app.includes("P2P chậm · đang thử máy chủ dự phòng…"));
 });
 
 
