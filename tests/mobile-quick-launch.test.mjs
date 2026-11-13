@@ -82,9 +82,10 @@ test('online uses Supabase relay first and keeps direct PeerJS as fallback',asyn
   const peer=await readFile(new URL('../client/direct-peer-room.js',import.meta.url),'utf8');
   const content=await readFile(new URL('../scripts/content.mjs',import.meta.url),'utf8');
   assert.ok(content.includes("'direct-peer-room.js'"));
+  assert.ok(app.includes("let current=createNetwork();"));
   assert.ok(app.includes("current=createDirectNetwork();"));
-  assert.ok(app.includes("u.searchParams.set('transport','peer')"));
-  assert.ok(app.includes("invitedTransport==='peer'?createDirectNetwork():createNetwork()"));
+  assert.ok(!app.includes("u.searchParams.set('transport','peer')"));
+  assert.ok(!app.includes("invitedTransport"));
   assert.ok(peer.includes("root.DirectPeerRoom=DirectPeerRoom"));
   assert.ok(peer.includes("host:'0.peerjs.com'"));
 });
@@ -124,4 +125,22 @@ test('GitHub Pages font URLs are project-relative',async()=>{
   const shell=await readFile(new URL('../client/shell.html',import.meta.url),'utf8');
   assert.ok(shell.includes('src:url("assets/noto-sans-1.woff")'));
   assert.ok(!shell.includes('src:url("/assets/noto-sans-1.woff")'));
+});
+
+
+test('invite links carry build version and never force peer transport',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  const content=await readFile(new URL('../scripts/content.mjs',import.meta.url),'utf8');
+  assert.ok(app.includes("u.searchParams.set('v',build)"));
+  assert.ok(app.includes("u.searchParams.set('room',net?net.room:$('roomCode').textContent)"));
+  assert.ok(!app.includes("searchParams.set('transport','peer')"));
+  assert.ok(content.includes("window.ROOSTER_BUILD_ID="));
+});
+
+
+test('arena render loop survives canvas draw errors',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes("let renderErrorLogged=false"));
+  assert.ok(app.includes("finally{\n      requestAnimationFrame(render);"));
+  assert.ok(app.includes("if(images.background&&images.background.naturalWidth)ctx.drawImage"));
 });
