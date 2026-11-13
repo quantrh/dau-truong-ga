@@ -24,7 +24,7 @@ test('mobile gamepad only shows while a match is playing',async()=>{
 
 test('invite room links auto-join without requiring the join form',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
-  assert.ok(app.includes("const invitedCode=(new URLSearchParams(location.search).get('room')||'').trim().toUpperCase()"));
+  assert.ok(app.includes("const inviteParams=new URLSearchParams(location.search);const invitedCode=(inviteParams.get('room')||'').trim().toUpperCase()"));
   assert.ok(app.includes('function maybeAutoJoinInvite()'));
   assert.ok(app.includes('joinRoomCode(invitedCode,true)'));
   assert.ok(app.includes("$('roomEntry').hidden=true"));
