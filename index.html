@@ -2311,7 +2311,9 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
       btn.textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →';btn.disabled=false;return;
     }
     if(!net||!roomRoster){
-      btn.textContent=onlineAutoCreating?'ĐANG TẠO PHÒNG…':'ĐANG CHUẨN BỊ PHÒNG…';btn.disabled=true;return;
+      btn.textContent=onlineAutoCreating?'ĐANG TẠO PHÒNG…':'THỬ TẠO PHÒNG →';
+      btn.disabled=onlineAutoCreating;
+      return;
     }
     if(roomRoster.status==='playing'){
       btn.textContent='TRẬN ĐANG DIỄN RA';btn.disabled=true;return;
@@ -2341,7 +2343,18 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
       button.setAttribute('aria-pressed',String(active));
     });
     $('offlineOptions').hidden=mode==='online';$('onlineOptions').hidden=mode!=='online';
-    if($('settingsMenu')&&changed)$('settingsMenu').open=false;
+    if($('settingsMenu')){
+      if(changed)$('settingsMenu').open=false;
+      $('settingsMenu').hidden=mode==='online';
+    }
+    const lobbyTip=document.querySelector('.lobby > .tip-card');
+    const lobbyFooter=document.querySelector('.lobby > .lobby-footer');
+    if(lobbyTip)lobbyTip.hidden=mode==='online';
+    if(lobbyFooter)lobbyFooter.hidden=mode==='online';
+    if(mode==='online'){
+      $('networkStatus').textContent=invitedCode?'Đang vào phòng từ link mời…':'Đang chuẩn bị phòng online…';
+      $('networkStatus').classList.remove('error');
+    }
     $('trainingCoach').hidden=mode!=='training';
     $('matchFacts').hidden=mode==='training';
     $('powerChoice').hidden=mode==='training';
@@ -2581,23 +2594,31 @@ THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
     if(!loaded||onlineAutoCreating||net||roomRoster)return;
     onlineAutoCreating=true;syncMobileQuickAction();
     playing=false;disconnected=false;resetVisuals();releaseKeys();$('splash').hidden=false;$('sceneLabel').hidden=false;
-    $('networkStatus').textContent='Đang tạo phòng và chuẩn bị link mời…';$('networkStatus').classList.remove('error');
+    $('networkStatus').textContent='Đang mở phòng trực tiếp…';$('networkStatus').classList.remove('error');
+    const identity=fallbackIdentity();
     let current=null;
     try{
-      // Online room creation must never wait for profile/Supabase Auth.
-      // The room server accepts an empty player identity and falls back to Power 100.
-      const identity=fallbackIdentity();
-      current=createNetwork();
-      await current.create(playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId,matchMode:currentPowerMode()});
-    }catch(error){
+      current=createDirectNetwork();
+      await current.create(playerName(),{
+        roosterName:identity.roosterName,
+        powerRating:identity.powerRating,
+        matchMode:currentPowerMode()
+      });
+      return;
+    }catch(peerError){
       try{
-        $('networkStatus').textContent='Relay không phản hồi · đang chuyển sang kết nối P2P…';$('networkStatus').classList.remove('error');
-        current=createDirectNetwork();
-        await current.create(playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating,matchMode:currentPowerMode()});
+        $('networkStatus').textContent='P2P không phản hồi · đang thử máy chủ phòng…';$('networkStatus').classList.remove('error');
+        current=createNetwork();
+        await current.create(playerName(),{
+          accessToken:identity.accessToken,
+          roosterId:identity.roosterId,
+          matchMode:currentPowerMode()
+        });
         return;
-      }catch(peerError){
+      }catch(relayError){
         onlineAutoCreating=false;
-        $('networkStatus').textContent=(peerError&&peerError.message?peerError.message:(error&&error.message?error.message:'Không tạo được phòng.'))+' Chạm nút bên dưới để thử lại.';
+        closeNet();
+        $('networkStatus').textContent=(relayError&&relayError.message?relayError.message:(peerError&&peerError.message?peerError.message:'Không tạo được phòng.'))+' Chạm nút bên dưới để thử lại.';
         $('networkStatus').classList.add('error');
         syncMobileQuickAction();
         if($('mobilePrimaryBtn')){$('mobilePrimaryBtn').textContent='THỬ TẠO PHÒNG LẠI →';$('mobilePrimaryBtn').disabled=false;}
