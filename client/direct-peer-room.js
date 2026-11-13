@@ -151,6 +151,27 @@
         });
         peer.on('error',error=>{if(!settled){settled=true;clearTimeout(timer);reject(error);}});
       });
+      this._emit('joining','Đã nối tới chủ phòng · đang nhận trạng thái phòng…');
+      await new Promise((resolve,reject)=>{
+        const started=Date.now();
+        const timer=setInterval(()=>{
+          if(this.lobby){
+            clearInterval(timer);
+            resolve();
+            return;
+          }
+          if(this._closed||!this.connection||!this.connection.open){
+            clearInterval(timer);
+            reject(new Error('Kết nối tới chủ phòng đã đóng.'));
+            return;
+          }
+          if(Date.now()-started>6000){
+            clearInterval(timer);
+            reject(new Error('Chủ phòng chưa xác nhận kết nối. Hãy thử lại link mời.'));
+          }
+        },80);
+      });
+      this._emit('waiting','Đã vào phòng · chờ cả hai sẵn sàng.');
       return code;
     }
     async setReady(ready){
