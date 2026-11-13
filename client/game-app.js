@@ -740,7 +740,7 @@
     if(!loaded||onlineAutoCreating||roomRoster)return;
     onlineAutoCreating=true;
     playing=false;disconnected=false;
-    $('networkStatus').textContent='Đang mở phòng trực tiếp…';$('networkStatus').classList.remove('error');
+    $('networkStatus').textContent='Đang tạo phòng online…';$('networkStatus').classList.remove('error');
     syncMobileQuickAction();
 
     const identity=fallbackIdentity();
@@ -752,8 +752,25 @@
     let success=false;
     let lastError=null;
     try{
-      // Primary path: direct P2P. The deprecated chatgpt.site backend is not used.
-      let current=createDirectNetwork();
+      // Primary path: Supabase room relay. RoosterNet may upgrade to direct P2P,
+      // but gameplay keeps working through relay when mobile NAT blocks WebRTC.
+      let current=createNetwork();
+      onlineAutoCreating=true;syncMobileQuickAction();
+      try{
+        await withTimeout(current.create(playerName(),{
+          accessToken:identity.accessToken,
+          roosterId:identity.roosterId,
+          matchMode:currentPowerMode()
+        }),8500,'Máy chủ phòng không phản hồi.');
+        success=true;
+        return;
+      }catch(error){
+        lastError=error;
+      }
+
+      // Last-resort fallback: direct PeerJS room.
+      $('networkStatus').textContent='Máy chủ phòng chậm · đang thử kết nối trực tiếp…';$('networkStatus').classList.remove('error');
+      current=createDirectNetwork();
       onlineAutoCreating=true;syncMobileQuickAction();
       try{
         await withTimeout(current.create(playerName(),{
@@ -761,22 +778,6 @@
           powerRating:identity.powerRating,
           matchMode:currentPowerMode()
         }),7500,'Kết nối trực tiếp không phản hồi.');
-        success=true;
-        return;
-      }catch(error){
-        lastError=error;
-      }
-
-      // Fallback: Supabase room relay only.
-      $('networkStatus').textContent='P2P chậm · đang thử máy chủ dự phòng…';$('networkStatus').classList.remove('error');
-      current=createNetwork();
-      onlineAutoCreating=true;syncMobileQuickAction();
-      try{
-        await withTimeout(current.create(playerName(),{
-          accessToken:identity.accessToken,
-          roosterId:identity.roosterId,
-          matchMode:currentPowerMode()
-        }),6500,'Máy chủ dự phòng không phản hồi.');
         success=true;
         return;
       }catch(error){
