@@ -33,9 +33,11 @@ test('invite room links auto-join without requiring the join form',async()=>{
 
 test('failed invite join stays simple and does not expose manual room entry',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
-  assert.ok(app.includes("if(auto){$('roomEntry').hidden=true;"));
-  assert.ok(app.includes("Link mời không còn hiệu lực. Hãy nhờ chủ phòng gửi link mới."));
+  assert.ok(app.includes("if(auto)$('roomEntry').hidden=true;"));
+  assert.ok(app.includes("Nhờ chủ phòng gửi link mới."));
   assert.ok(app.includes("$('roomEntry').hidden=true;$('playerName').disabled=false"));
+  assert.ok(app.includes("current=createNetwork();"));
+  assert.ok(app.includes("current=createDirectNetwork();"));
 });
 
 
