@@ -8,7 +8,7 @@ export const SUPABASE_ROOM_API = 'https://rmbsxccrwrktbjlnezpu.supabase.co/funct
 export const PUBLIC_GAME_URL = 'https://quantrh.github.io/dau-truong-ga/';
 export const SUPABASE_URL = 'https://rmbsxccrwrktbjlnezpu.supabase.co';
 export const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtYnN4Y2Nyd3JrdGJqbG5lenB1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2MjczNjQsImV4cCI6MjA2NDIwMzM2NH0.ydCqificftdtn1niRciFCifeuo8aX6SDGti-hCY5Z_Y';
-const scripts = ['peerjs.min.js', 'game-engine.js', 'rooster-net.js', 'controls.js', 'progression.js', 'profile.js', 'game-app.js'];
+const scripts = ['peerjs.min.js', 'game-engine.js', 'rooster-net.js', 'direct-peer-room.js', 'controls.js', 'progression.js', 'profile.js', 'game-app.js'];
 const mimeFor = name => name.endsWith('.woff') ? 'font/woff' : name.endsWith('.jpg') ? 'image/jpeg' : 'image/png';
 
 export async function embeddedAssets() {
