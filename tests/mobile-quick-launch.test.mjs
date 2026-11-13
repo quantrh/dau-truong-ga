@@ -101,9 +101,9 @@ test('online selection hides settings and lobby clutter',async()=>{
 test('online room creation always releases the busy state',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   assert.ok(app.includes("}finally{\n      onlineAutoCreating=false;"));
-  assert.ok(app.includes("6500,'Máy chủ dự phòng không phản hồi.'"));
+  assert.ok(app.includes("8500,'Máy chủ phòng không phản hồi.'"));
   assert.ok(app.includes("7500,'Kết nối trực tiếp không phản hồi.'"));
-  assert.ok(app.includes("P2P chậm · đang thử máy chủ dự phòng…"));
+  assert.ok(app.includes("Máy chủ phòng chậm · đang thử kết nối trực tiếp…"));
 });
 
 
