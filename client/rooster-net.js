@@ -98,6 +98,7 @@
       const started = Date.now();
       try {
         const headers = { 'Content-Type': 'application/json' };
+        if (root.ROOSTER_SUPABASE_KEY) headers.apikey = root.ROOSTER_SUPABASE_KEY;
         if (authenticated) headers.Authorization = 'Bearer ' + this._token;
         const response = await this._fetch(this.baseUrl + path, {
           method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal,
@@ -456,7 +457,7 @@
       if (shouldLeave && this._fetch) {
         try {
           const result = this._fetch(this.baseUrl + '/api/rooms/' + code + '/leave', { method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: '{}',
+            headers: Object.assign({ 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, root.ROOSTER_SUPABASE_KEY ? { apikey: root.ROOSTER_SUPABASE_KEY } : {}), body: '{}',
             credentials: 'omit', cache: 'no-store', keepalive: true
           });
           if (result && result.catch) result.catch(noop);
