@@ -33,7 +33,8 @@ export async function makeHTML({ standalone = false, external = false } = {}) {
   shell = shell.replace(/\/assets\/[a-zA-Z0-9_.-]+/g, assetURL);
   // Same-origin on the hosted site/preview; explicit production origin only
   // for the downloadable HTML and GitHub Pages frontend.
-  const config = `window.ROOSTER_ONLINE_API=${JSON.stringify(SUPABASE_ROOM_API)};window.ROOSTER_PUBLIC_GAME_URL=${JSON.stringify(PUBLIC_GAME_URL)};window.ROOSTER_SUPABASE_URL=${JSON.stringify(SUPABASE_URL)};window.ROOSTER_SUPABASE_KEY=${JSON.stringify(SUPABASE_KEY)};window.ROOSTER_ONLINE_ORIGIN='';`;
+  const buildId=(process.env.GITHUB_SHA||process.env.SOURCE_VERSION||'dev').slice(0,12);
+  const config = `window.ROOSTER_BUILD_ID=${JSON.stringify(buildId)};window.ROOSTER_ONLINE_API=${JSON.stringify(SUPABASE_ROOM_API)};window.ROOSTER_PUBLIC_GAME_URL=${JSON.stringify(PUBLIC_GAME_URL)};window.ROOSTER_SUPABASE_URL=${JSON.stringify(SUPABASE_URL)};window.ROOSTER_SUPABASE_KEY=${JSON.stringify(SUPABASE_KEY)};window.ROOSTER_ONLINE_ORIGIN='';`;
   const parts = [`<script>${config}window.ROOSTER_ASSETS=${JSON.stringify(map).replace(/<\//g, '<\\/')};</script>`];
   for (const name of scripts) {
     const script = await readFile(path.join(ROOT, 'client', name), 'utf8');
