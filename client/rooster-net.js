@@ -259,7 +259,9 @@
     send(packet) {
       if (!this.connected || !packet || typeof packet !== 'object') return false;
       if (this.role === 'host' && (packet.type === 'state' || packet.type === 'start')) {
-        if (!integer(packet.seq) || !packet.state || !validTree(packet.state)) return false;
+        let safeState;
+        try { safeState = clone(packet.state); } catch (_) { return false; }
+        if (!integer(packet.seq) || !safeState || !validTree(safeState)) return false;
         if (packet.type === 'start') {
           this._gameId = String(gameNumber(this._gameId) + 1);
           this._lastInputSeq = -1;
@@ -267,7 +269,7 @@
           delete this._payload.control;
         }
         if (!gameNumber(this._gameId)) return false;
-        this._payload.state = { type: packet.type, seq: packet.seq, gameId: this._gameId, state: clone(packet.state), paused: !!packet.paused };
+        this._payload.state = { type: packet.type, seq: packet.seq, gameId: this._gameId, state: safeState, paused: !!packet.paused };
       } else if (this.role === 'guest' && packet.type === 'input') {
         if (!integer(packet.seq) || !gameNumber(this._gameId)) return false;
         const keys = {}, actions = {};
@@ -278,7 +280,7 @@
         this._payload.control = { type: 'rematch-request', id: ++this._controlSeq, gameId: this._gameId };
       } else return false;
       this._sendDirectPayload();
-      if (packet.type === 'start' || packet.type === 'rematch-request') this._schedulePoll(0);
+      this._schedulePoll(0);
       return true;
     }
 
