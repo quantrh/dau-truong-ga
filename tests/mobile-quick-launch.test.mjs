@@ -144,3 +144,20 @@ test('arena render loop survives canvas draw errors',async()=>{
   assert.ok(app.includes("finally{\n      requestAnimationFrame(render);"));
   assert.ok(app.includes("if(images.background&&images.background.naturalWidth)ctx.drawImage"));
 });
+
+
+test('online gameplay forces relay and schedules every payload immediately',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  const net=await readFile(new URL('../client/rooster-net.js',import.meta.url),'utf8');
+  assert.ok(app.includes("forceRelay:true"));
+  assert.ok(net.includes("this._schedulePoll(0);\n      return true;"));
+  assert.ok(net.includes("safeState = clone(packet.state)"));
+});
+
+
+test('Safari arena render loop can be rearmed and has CSS background fallback',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes("function ensureRenderLoop()"));
+  assert.ok(app.includes("ensureRenderLoop();"));
+  assert.ok(app.includes("style.backgroundImage='url"));
+});
