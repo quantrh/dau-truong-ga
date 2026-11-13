@@ -830,7 +830,10 @@
       try{
         current=createNetwork(true);
         await current.join(code,playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating});
-        releaseKeys();resetVisuals();
+        // Network join is authoritative. UI cleanup must never turn a successful
+        // /join into a fallback attempt that closes the just-joined room.
+        try{releaseKeys();}catch(_){}
+        try{resetVisuals();}catch(_){}
         return true;
       }catch(error){
         lastError=error;
@@ -839,7 +842,8 @@
         $('networkStatus').textContent='Máy chủ phòng chưa nhận được link · đang thử P2P trực tiếp…';$('networkStatus').classList.remove('error');
         current=createDirectNetwork(true);
         await current.join(code,playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating});
-        releaseKeys();resetVisuals();
+        try{releaseKeys();}catch(_){}
+        try{resetVisuals();}catch(_){}
         return true;
       }catch(error){
         lastError=error;
