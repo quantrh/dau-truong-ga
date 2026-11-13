@@ -989,7 +989,22 @@
     ctx.rotate(v.lean);
     const dashCrouch=f.action==='dash'?1:0;
     ctx.scale(1+v.squash*.3-Math.sin(v.turn/.09*Math.PI)*.07+(dashCrouch*.05),1-v.squash-(dashCrouch*.10));
-    const draw=()=>ctx.drawImage(source,sprite.x,sprite.y,sprite.w,sprite.h,-sprite.anchorX*scale,-sprite.anchorY*scale,sprite.w*scale,sprite.h*scale);
+    const draw=()=>{
+      if(source&&source.naturalWidth&&sprite&&sprite.w>0&&sprite.h>0){
+        ctx.drawImage(source,sprite.x,sprite.y,sprite.w,sprite.h,-sprite.anchorX*scale,-sprite.anchorY*scale,sprite.w*scale,sprite.h*scale);
+        return;
+      }
+      // Safari/iOS fallback while an image atlas is unavailable: keep both fighters visible.
+      ctx.save();
+      ctx.fillStyle=index?'#d9ddd6':'#9f4f24';
+      ctx.beginPath();ctx.ellipse(-8,-105,54,76,-.18,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=index?'#e8ece7':'#d27a31';
+      ctx.beginPath();ctx.arc(26,-165,27,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#c53b30';ctx.beginPath();ctx.arc(31,-188,12,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#d6a13e';ctx.beginPath();ctx.moveTo(51,-168);ctx.lineTo(76,-160);ctx.lineTo(51,-151);ctx.closePath();ctx.fill();
+      ctx.strokeStyle='#332716';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-16,-35);ctx.lineTo(-26,8);ctx.moveTo(10,-35);ctx.lineTo(18,8);ctx.stroke();
+      ctx.restore();
+    };
     if(f.dashTimer>0&&!reduced){
       for(let trail=2;trail>0;trail--){
         ctx.save();ctx.globalAlpha=.045*(3-trail);ctx.translate(-f.dashDirection*f.facing*trail*19,0);draw();ctx.restore();
@@ -1288,7 +1303,14 @@
     document.fonts.load('700 16px "Noto Sans Game"', 'Đánh đúng lúc, thắng đúng nhịp'),
     document.fonts.load('italic 400 16px "Noto Sans Game"', 'Bản lĩnh trong từng nhịp cánh')
   ]).then(()=>{
-    loaded=true;$('loading').hidden=true;$('startBtn').disabled=false;$('startBtn').textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →';syncMobileQuickAction();
+    loaded=true;
+    try{
+      $('arena').style.backgroundImage='url("'+window.ROOSTER_ASSETS.background+'")';
+      $('arena').style.backgroundSize='cover';
+      $('arena').style.backgroundPosition='center';
+    }catch(_){}
+    ensureRenderLoop();
+    $('loading').hidden=true;$('startBtn').disabled=false;$('startBtn').textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →';syncMobileQuickAction();
     setRoles();updateHUD();maybeAutoJoinInvite();maybeAutoHostOnline();
   }).catch(()=>{
     $('loading').textContent='Không đọc được hình ảnh hoặc font chữ. Hãy tải lại file HTML đầy đủ rồi mở lại.';
