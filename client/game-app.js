@@ -517,6 +517,7 @@
     $('messageKicker').textContent=kicker;
     $('messageTitle').textContent=title;
     $('messageDetail').textContent=detail||'';
+    if($('resumeBtn'))$('resumeBtn').hidden=!paused;
   }
   function togglePause(force) {
     if(!playing||selectedMode==='online'||game.state.phase==='matchEnd')return;
@@ -525,6 +526,7 @@
     releaseKeys();
     $('pauseBtn').textContent=paused?'▶':'II';
     $('pauseBtn').setAttribute('aria-label',paused?'Tiếp tục trận đấu':'Tạm dừng');
+    if($('resumeBtn'))$('resumeBtn').hidden=!paused;
     updateHUD();
   }
   function result() {
@@ -576,7 +578,7 @@
       showCenter('HIỆP '+s.round+' · SẴN SÀNG',String(n),'Giữ nhịp. Chờ thời điểm.');
       if(activeCountdown!==n){sound('count');activeCountdown=n;}
     } else if(s.phase==='fight') {
-      $('centerMessage').hidden=true;activeCountdown=-1;
+      $('centerMessage').hidden=true;if($('resumeBtn'))$('resumeBtn').hidden=true;activeCountdown=-1;
     } else if(s.phase==='roundEnd') {
       showCenter(s.roundWinner<0?'HIỆP ĐẤU HÒA':'KẾT THÚC HIỆP '+s.round,s.roundWinner<0?'Hòa!':names[s.roundWinner]+' thắng',s.roundWinner<0?'Đấu lại hiệp, không tính điểm.':'Tỉ số '+s.wins[0]+' – '+s.wins[1]+' · Chuẩn bị hiệp tiếp theo');
       $('messageTitle').style.fontSize='clamp(24px,4vw,56px)';
@@ -1065,6 +1067,17 @@
   });
   $('rematchBtn').addEventListener('click',requestRematch);
   $('pauseBtn').addEventListener('click',()=>togglePause());
+  if($('resumeBtn')){
+    $('resumeBtn').addEventListener('pointerup',event=>{
+      if(event.pointerType!=='touch'&&event.pointerType!=='pen')return;
+      event.preventDefault();
+      if(paused)togglePause(false);
+    });
+    $('resumeBtn').addEventListener('click',event=>{
+      event.preventDefault();
+      if(paused)togglePause(false);
+    });
+  }
   $('exitMatchBtn').addEventListener('click',()=>lobby());
   $('copyBtn').addEventListener('click',async()=>{
     const code=$('roomCode').textContent;
