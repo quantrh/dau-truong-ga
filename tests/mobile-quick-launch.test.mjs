@@ -74,3 +74,16 @@ test('online host creation bypasses profile loading entirely',async()=>{
   assert.ok(app.includes("requestTimeout:5000"));
   assert.ok(app.includes("THỬ TẠO PHÒNG LẠI →"));
 });
+
+
+test('online falls back to direct PeerJS rooms when relay is unreachable',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  const peer=await readFile(new URL('../client/direct-peer-room.js',import.meta.url),'utf8');
+  const content=await readFile(new URL('../scripts/content.mjs',import.meta.url),'utf8');
+  assert.ok(content.includes("'direct-peer-room.js'"));
+  assert.ok(app.includes("current=createDirectNetwork()"));
+  assert.ok(app.includes("u.searchParams.set('transport','peer')"));
+  assert.ok(app.includes("invitedTransport==='peer'?createDirectNetwork():createNetwork()"));
+  assert.ok(peer.includes("root.DirectPeerRoom=DirectPeerRoom"));
+  assert.ok(peer.includes("host:'0.peerjs.com'"));
+});
