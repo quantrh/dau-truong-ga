@@ -33,7 +33,7 @@
   const trainingSteps=['left','right','jump','peck','kick','guard','dash'];
   let trainingDone=new Set(),trainingLastX=640;
   let profileState=null,profileInitPromise=null;
-  const inviteParams=new URLSearchParams(location.search);const invitedCode=(inviteParams.get('room')||'').trim().toUpperCase();const invitedTransport=(inviteParams.get('transport')||'').trim().toLowerCase();
+  const inviteParams=new URLSearchParams(location.search);const invitedCode=(inviteParams.get('room')||'').trim().toUpperCase();
   let inviteAutoJoinStarted=false,onlineAutoCreating=false,onlineAutoJoining=false;
   function clearRemoteActions(){remotePending=freshActions();remoteRelease={jump:false,dash:false};}
   function receiveActions(raw){
@@ -66,7 +66,11 @@
   }
   function shareURL(){
     const base=window.ROOSTER_PUBLIC_GAME_URL||(location.protocol==='http:'||location.protocol==='https:'?location.href:'https://quantrh.github.io/dau-truong-ga/');
-    const u=new URL(base);u.search='';u.hash='';u.searchParams.set('room',net?net.room:$('roomCode').textContent);if(net&&net.isDirectFallback)u.searchParams.set('transport','peer');return u.toString();
+    const u=new URL(base);u.search='';u.hash='';
+    const build=window.ROOSTER_BUILD_ID||inviteParams.get('v')||'current';
+    u.searchParams.set('v',build);
+    u.searchParams.set('room',net?net.room:$('roomCode').textContent);
+    return u.toString();
   }
   let hudState = '';
   const controls = new RoosterControls({
@@ -811,25 +815,29 @@
       $('networkStatus').classList.remove('error');
     }
     let current=null;
+    let lastError=null;
     try{
-      // Invite links also bypass profile loading so joining works on flaky mobile networks.
+      // Invite links always try the Supabase relay first. Old links may still
+      // contain transport=peer, but that hint is intentionally ignored.
       const identity=fallbackIdentity();
-      current=invitedTransport==='peer'?createDirectNetwork():createNetwork();
-      await current.join(code,playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating});
-      return true;
-    }catch(error){
-      if(invitedTransport!=='peer'){
-        try{
-          $('networkStatus').textContent='Relay không phản hồi · đang thử P2P trực tiếp…';$('networkStatus').classList.remove('error');
-          const identity=fallbackIdentity();current=createDirectNetwork();
-          await current.join(code,playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating});
-          return true;
-        }catch(_){}
+      try{
+        current=createNetwork();
+        await current.join(code,playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating});
+        return true;
+      }catch(error){
+        lastError=error;
       }
-      if(!current||current===net){
-        $('networkStatus').textContent=error&&error.message?error.message:'Không vào được phòng. Hãy mở lại link mời.';$('networkStatus').classList.add('error');
-        if(auto){$('roomEntry').hidden=true;$('networkStatus').textContent='Link mời không còn hiệu lực. Hãy nhờ chủ phòng gửi link mới.';}
+      try{
+        $('networkStatus').textContent='Máy chủ phòng chưa nhận được link · đang thử P2P trực tiếp…';$('networkStatus').classList.remove('error');
+        current=createDirectNetwork();
+        await current.join(code,playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating});
+        return true;
+      }catch(error){
+        lastError=error;
       }
+      $('networkStatus').textContent=(lastError&&lastError.message?lastError.message:'Không vào được phòng.')+' Nhờ chủ phòng gửi link mới.';
+      $('networkStatus').classList.add('error');
+      if(auto)$('roomEntry').hidden=true;
       return false;
     }finally{
       onlineAutoJoining=false;
@@ -1008,13 +1016,20 @@
       ctx.fillText(roomRoster?(index?(roomRoster.guest?roomRoster.guest.name:'Đang chờ bạn…'):roomRoster.host.name):(index?'GÀ TRẮNG':'GÀ ĐIỀU'),x,ground+45);ctx.restore();
     }
   }
+  let renderErrorLogged=false;
   function render(now) {
     const dt=Math.min(.05,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
-    if(loaded){
-      const time=now/1000;
-      ctx.save();ctx.clearRect(0,0,1280,720);
-      if(shake>.1){ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=Math.exp(-17*dt);}
-      ctx.drawImage(images.background,0,0,1280,720);
+    try{
+      if(loaded){
+        const time=now/1000;
+        ctx.save();ctx.clearRect(0,0,1280,720);
+        if(shake>.1){ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=Math.exp(-17*dt);}
+        try{
+          if(images.background&&images.background.naturalWidth)ctx.drawImage(images.background,0,0,1280,720);
+          else throw new Error('background not ready');
+        }catch(_){
+          ctx.fillStyle='#4b4938';ctx.fillRect(0,0,1280,720);
+        }
       ctx.fillStyle='rgba(46,38,14,.045)';ctx.fillRect(0,0,1280,720);
       ambient.forEach(d=>{
         const x=(d.x+time*d.speed)%1280,y=d.y+Math.sin(time*.25+d.x)*15;
@@ -1033,8 +1048,16 @@
         ctx.font='bold '+(f.text.length>3?15:24)+'px "Noto Sans Game"';ctx.textAlign='center';
         ctx.shadowColor='#33270c';ctx.shadowBlur=7;ctx.fillText(f.text,f.x,f.y);ctx.shadowBlur=0;
       });ctx.globalAlpha=1;ctx.restore();
+      }
+    }catch(error){
+      if(!renderErrorLogged){
+        renderErrorLogged=true;
+        try{console.error('Arena render recovered after error',error);}catch(_){}
+      }
+      try{ctx.restore();}catch(_){}
+    }finally{
+      requestAnimationFrame(render);
     }
-    requestAnimationFrame(render);
   }
   function tick(){
     const now=performance.now(),dt=Math.min(.1,Math.max(0,(now-lastLogic)/1000));lastLogic=now;
