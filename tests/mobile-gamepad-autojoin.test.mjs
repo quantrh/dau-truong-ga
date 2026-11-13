@@ -56,3 +56,13 @@ test('direct peer join waits for host lobby acknowledgement',async()=>{
   assert.ok(peer.includes("Chủ phòng chưa xác nhận kết nối. Hãy thử lại link mời."));
   assert.ok(peer.includes("Đã vào phòng · chờ cả hai sẵn sàng."));
 });
+
+
+test('guest sends join before lobby UI reset',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  const join=app.slice(app.indexOf('async function joinRoomCode'),app.indexOf('async function joinRoom(event)'));
+  assert.ok(join.includes('current=createNetwork(true)'));
+  assert.ok(join.includes('current=createDirectNetwork(true)'));
+  assert.ok(!join.includes("resetVisuals();releaseKeys();$('splash').hidden=false"));
+  assert.ok(app.includes('function resetNetworkTransportOnly()'));
+});
