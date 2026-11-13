@@ -33,7 +33,7 @@
   const trainingSteps=['left','right','jump','peck','kick','guard','dash'];
   let trainingDone=new Set(),trainingLastX=640;
   let profileState=null,profileInitPromise=null;
-  const invitedCode=(new URLSearchParams(location.search).get('room')||'').trim().toUpperCase();
+  const inviteParams=new URLSearchParams(location.search);const invitedCode=(inviteParams.get('room')||'').trim().toUpperCase();const invitedTransport=(inviteParams.get('transport')||'').trim().toLowerCase();
   let inviteAutoJoinStarted=false,onlineAutoCreating=false;
   function clearRemoteActions(){remotePending=freshActions();remoteRelease={jump:false,dash:false};}
   function receiveActions(raw){
@@ -66,7 +66,7 @@
   }
   function shareURL(){
     const base=window.ROOSTER_PUBLIC_GAME_URL||(location.protocol==='http:'||location.protocol==='https:'?location.href:'https://quantrh.github.io/dau-truong-ga/');
-    const u=new URL(base);u.search='';u.hash='';u.searchParams.set('room',net?net.room:$('roomCode').textContent);return u.toString();
+    const u=new URL(base);u.search='';u.hash='';u.searchParams.set('room',net?net.room:$('roomCode').textContent);if(net&&net.isDirectFallback)u.searchParams.set('transport','peer');return u.toString();
   }
   let hudState = '';
   const controls = new RoosterControls({
@@ -677,6 +677,47 @@
     net=new RoosterNet(options);
     return net;
   }
+  function createDirectNetwork(){
+    closeNet();
+    const epoch=netEpoch;
+    const options={
+      onStatus(status){
+        if(epoch!==netEpoch)return;
+        $('networkStatus').textContent=status.message;
+        $('networkStatus').classList.toggle('error',status.state==='error'||status.state==='disconnected');
+        syncMobileQuickAction();
+      },
+      onLobby(room){if(epoch===netEpoch)renderRoom(room);},
+      onConnect(info){
+        if(epoch!==netEpoch)return;
+        onlineRole=info.role;lastState=performance.now();
+        if(roomRoster)applyRoomPowerRules(roomRoster);
+        beginGame('online');
+        if(info.role==='host')net.send({type:'start',state:game.snapshot(),seq:++stateSeq,paused:false});
+        else showCenter('ĐÃ KẾT NỐI','Sẵn sàng','Đang nhận trận đấu từ chủ phòng');
+      },
+      onData(packet){
+        if(epoch!==netEpoch||!packet)return;
+        if(onlineRole==='host'&&packet.type==='input'){
+          if(!Number.isFinite(packet.seq)||packet.seq<=lastInputSeq)return;
+          lastInputSeq=packet.seq;remoteInput=cleanInput(packet.keys);receiveActions(packet.actions);remoteFocused=packet.focused!==false;lastRemoteInput=performance.now();
+        } else if(onlineRole==='guest'&&(packet.type==='state'||packet.type==='start')){
+          if(Number.isFinite(packet.seq)&&packet.seq<=lastStateSeq&&packet.type!=='start')return;
+          if(game.loadSnapshot(packet.state)){
+            if(Number.isFinite(packet.seq))lastStateSeq=packet.seq;
+            if(packet.type==='start'){playing=true;disconnected=false;paused=false;resetVisuals();keys.clear();localActions=freshActions();}
+            remoteHostPaused=packet.paused===true;lastState=performance.now();effects(game.state.recentEvents);hudState='';
+            if(!playing&&!disconnected){playing=true;resetVisuals();}
+          }
+        } else if(packet.type==='rematch-request'&&game.state.phase==='matchEnd'){
+          remoteRematchWanted=true;if(rematchWanted&&onlineRole==='host')startRematch();
+        }
+      },
+      onDisconnect(message){if(epoch===netEpoch)markDisconnected(message);}
+    };
+    net=new DirectPeerRoom(options);
+    return net;
+  }
   async function hostRoom(){
     if(!loaded||onlineAutoCreating||net||roomRoster)return;
     onlineAutoCreating=true;syncMobileQuickAction();
@@ -690,13 +731,18 @@
       current=createNetwork();
       await current.create(playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId,matchMode:currentPowerMode()});
     }catch(error){
-      onlineAutoCreating=false;
-      if(!current||current===net){
-        $('networkStatus').textContent=(error&&error.message?error.message:'Không tạo được phòng.')+' Chạm nút bên dưới để thử lại.';
+      try{
+        $('networkStatus').textContent='Relay không phản hồi · đang chuyển sang kết nối P2P…';$('networkStatus').classList.remove('error');
+        current=createDirectNetwork();
+        await current.create(playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating,matchMode:currentPowerMode()});
+        return;
+      }catch(peerError){
+        onlineAutoCreating=false;
+        $('networkStatus').textContent=(peerError&&peerError.message?peerError.message:(error&&error.message?error.message:'Không tạo được phòng.'))+' Chạm nút bên dưới để thử lại.';
         $('networkStatus').classList.add('error');
+        syncMobileQuickAction();
+        if($('mobilePrimaryBtn')){$('mobilePrimaryBtn').textContent='THỬ TẠO PHÒNG LẠI →';$('mobilePrimaryBtn').disabled=false;}
       }
-      syncMobileQuickAction();
-      if($('mobilePrimaryBtn')){$('mobilePrimaryBtn').textContent='THỬ TẠO PHÒNG LẠI →';$('mobilePrimaryBtn').disabled=false;}
     }
   }
   function maybeAutoHostOnline(){
@@ -717,10 +763,18 @@
     try{
       // Invite links also bypass profile loading so joining works on flaky mobile networks.
       const identity=fallbackIdentity();
-      current=createNetwork();
-      await current.join(code,playerName(),{accessToken:identity.accessToken,roosterId:identity.roosterId});
+      current=invitedTransport==='peer'?createDirectNetwork():createNetwork();
+      await current.join(code,playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating});
       return true;
     }catch(error){
+      if(invitedTransport!=='peer'){
+        try{
+          $('networkStatus').textContent='Relay không phản hồi · đang thử P2P trực tiếp…';$('networkStatus').classList.remove('error');
+          const identity=fallbackIdentity();current=createDirectNetwork();
+          await current.join(code,playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating});
+          return true;
+        }catch(_){}
+      }
       if(!current||current===net){
         $('networkStatus').textContent=error&&error.message?error.message:'Không vào được phòng. Hãy mở lại link mời.';$('networkStatus').classList.add('error');
         if(auto){$('roomEntry').hidden=true;$('networkStatus').textContent='Link mời không còn hiệu lực. Hãy nhờ chủ phòng gửi link mới.';}
