@@ -69,11 +69,11 @@ test('online room creation survives profile failures',async()=>{
 
 test('online host creation bypasses profile loading entirely',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
-  assert.ok(app.includes("const identity=fallbackIdentity();\n    let current=null;\n    try{\n      current=createDirectNetwork();"));
+  assert.ok(app.includes("const identity=fallbackIdentity();\n    const withTimeout="));
   assert.ok(app.includes("let current=createNetwork();"));
-  assert.ok(app.includes("current=invitedTransport==='peer'?createDirectNetwork():createNetwork()"));
+  assert.ok(app.includes("current=createDirectNetwork();"));
   assert.ok(app.includes("requestTimeout:5000"));
-  assert.ok(app.includes("THỬ TẠO PHÒNG LẠI →"));
+  assert.ok(app.includes("THỬ TẠO PHÒNG →"));
 });
 
 
