@@ -60,3 +60,5 @@ test('pause overlay exposes a tappable mobile resume button',async()=>{
   assert.ok(app.includes("$('resumeBtn').addEventListener('pointerup'"));
   assert.ok(app.includes("if(paused)togglePause(false)"));
 });
+
+// sync-trigger: mobile-resume-v2
