@@ -49,3 +49,14 @@ test('training and matches force-hide the intro splash until returning to lobby'
   assert.ok(app.includes("$('splash').hidden=true;$('splash').style.display='none'"));
   assert.ok(app.includes("$('splash').style.display='';$('splash').hidden=false"));
 });
+
+
+test('pause overlay exposes a tappable mobile resume button',async()=>{
+  const shell=await readFile(new URL('../client/shell.html',import.meta.url),'utf8');
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(shell.includes('id="resumeBtn"'));
+  assert.ok(shell.includes('.resume-btn{pointer-events:auto'));
+  assert.ok(app.includes("if($('resumeBtn'))$('resumeBtn').hidden=!paused"));
+  assert.ok(app.includes("$('resumeBtn').addEventListener('pointerup'"));
+  assert.ok(app.includes("if(paused)togglePause(false)"));
+});
