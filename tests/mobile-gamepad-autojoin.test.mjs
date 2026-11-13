@@ -66,3 +66,12 @@ test('guest sends join before lobby UI reset',async()=>{
   assert.ok(!join.includes("resetVisuals();releaseKeys();$('splash').hidden=false"));
   assert.ok(app.includes('function resetNetworkTransportOnly()'));
 });
+
+
+test('successful guest join cannot fall through to leave/fallback because of UI cleanup',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  const join=app.slice(app.indexOf('async function joinRoomCode'),app.indexOf('async function joinRoom(event)'));
+  assert.ok(join.includes("await current.join(code,playerName()"));
+  assert.ok(join.includes("try{releaseKeys();}catch(_){}"));
+  assert.ok(join.includes("try{resetVisuals();}catch(_){}"));
+});
