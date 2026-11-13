@@ -37,3 +37,20 @@ test('failed invite join stays simple and does not expose manual room entry',asy
   assert.ok(app.includes("Link mời không còn hiệu lực. Hãy nhờ chủ phòng gửi link mới."));
   assert.ok(app.includes("$('roomEntry').hidden=true;$('playerName').disabled=false"));
 });
+
+
+test('invite guest retry stays in join flow',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes("btn.textContent=onlineAutoJoining?'ĐANG VÀO PHÒNG…':'THỬ VÀO PHÒNG LẠI →'"));
+  assert.ok(app.includes("if(RoosterNet.validCode(invitedCode)){\n        joinRoomCode(invitedCode,true);"));
+  assert.ok(app.includes("document.body.classList.toggle('invite-guest',hasInviteRoom)"));
+});
+
+
+test('direct peer join waits for host lobby acknowledgement',async()=>{
+  const peer=await readFile(new URL('../client/direct-peer-room.js',import.meta.url),'utf8');
+  assert.ok(peer.includes("Đã nối tới chủ phòng · đang nhận trạng thái phòng…"));
+  assert.ok(peer.includes("if(this.lobby){"));
+  assert.ok(peer.includes("Chủ phòng chưa xác nhận kết nối. Hãy thử lại link mời."));
+  assert.ok(peer.includes("Đã vào phòng · chờ cả hai sẵn sàng."));
+});
