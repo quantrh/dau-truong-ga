@@ -70,14 +70,14 @@ test('online room creation survives profile failures',async()=>{
 test('online host creation bypasses profile loading entirely',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   assert.ok(app.includes("const identity=fallbackIdentity();\n    const withTimeout="));
-  assert.ok(app.includes("let current=createDirectNetwork();"));
-  assert.ok(app.includes("current=createNetwork();"));
+  assert.ok(app.includes("let current=createNetwork();"));
+  assert.ok(app.includes("current=createDirectNetwork();"));
   assert.ok(app.includes("requestTimeout:5000"));
   assert.ok(app.includes("THỬ TẠO PHÒNG →"));
 });
 
 
-test('online prefers direct PeerJS rooms and keeps Supabase as fallback',async()=>{
+test('online uses Supabase relay first and keeps direct PeerJS as fallback',async()=>{
   const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
   const peer=await readFile(new URL('../client/direct-peer-room.js',import.meta.url),'utf8');
   const content=await readFile(new URL('../scripts/content.mjs',import.meta.url),'utf8');
@@ -111,4 +111,17 @@ test('production config no longer references deprecated chatgpt.site',async()=>{
   const content=await readFile(new URL('../scripts/content.mjs',import.meta.url),'utf8');
   assert.ok(!content.includes('dau-truong-ga-quan.bidv-it-grou-8424.chatgpt.site'));
   assert.ok(content.includes("window.ROOSTER_ONLINE_API=${JSON.stringify(SUPABASE_ROOM_API)}"));
+});
+
+
+test('room relay sends Supabase apikey header',async()=>{
+  const net=await readFile(new URL('../client/rooster-net.js',import.meta.url),'utf8');
+  assert.ok(net.includes("if (root.ROOSTER_SUPABASE_KEY) headers.apikey = root.ROOSTER_SUPABASE_KEY"));
+});
+
+
+test('GitHub Pages font URLs are project-relative',async()=>{
+  const shell=await readFile(new URL('../client/shell.html',import.meta.url),'utf8');
+  assert.ok(shell.includes('src:url("assets/noto-sans-1.woff")'));
+  assert.ok(!shell.includes('src:url("/assets/noto-sans-1.woff")'));
 });
