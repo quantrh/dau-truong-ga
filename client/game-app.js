@@ -646,8 +646,15 @@
     $('roomHint').textContent=room.guest?'Bạn của bạn đã vào phòng.': 'Gửi mã hoặc link này cho bạn của bạn.';
     setRoles();syncMobileQuickAction();
   }
-  function createNetwork() {
-    closeNet();
+  function resetNetworkTransportOnly(){
+    ++netEpoch;
+    const old=net;net=null;
+    if(old)old.close();
+    onlineRole=null;roomRoster=null;networkHold=false;remoteFocused=true;remoteHostPaused=false;
+    remoteInput=empty();lastRemoteInput=0;clearRemoteActions();
+  }
+  function createNetwork(preserveUI=false) {
+    if(preserveUI)resetNetworkTransportOnly();else closeNet();
     const epoch=netEpoch;
     const options={
       requestTimeout:5000,
@@ -699,8 +706,8 @@
     net=new RoosterNet(options);
     return net;
   }
-  function createDirectNetwork(){
-    closeNet();
+  function createDirectNetwork(preserveUI=false){
+    if(preserveUI)resetNetworkTransportOnly();else closeNet();
     const epoch=netEpoch;
     const options={
       onStatus(status){
@@ -808,7 +815,7 @@
     if(!loaded){if(!auto)toast('Chờ hình ảnh tải xong rồi vào phòng.');return false;}
     if(!RoosterNet.validCode(code)){if(!auto)toast('Nhập đúng mã phòng 6 ký tự.');return false;}
     onlineAutoJoining=true;syncMobileQuickAction();
-    playing=false;disconnected=false;resetVisuals();releaseKeys();$('splash').hidden=false;$('sceneLabel').hidden=false;
+    playing=false;disconnected=false;
     if(auto){
       $('roomEntry').hidden=true;
       $('networkStatus').textContent='Đang tự động vào phòng '+code+' từ link mời…';
@@ -821,16 +828,18 @@
       // contain transport=peer, but that hint is intentionally ignored.
       const identity=fallbackIdentity();
       try{
-        current=createNetwork();
+        current=createNetwork(true);
         await current.join(code,playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating});
+        releaseKeys();resetVisuals();
         return true;
       }catch(error){
         lastError=error;
       }
       try{
         $('networkStatus').textContent='Máy chủ phòng chưa nhận được link · đang thử P2P trực tiếp…';$('networkStatus').classList.remove('error');
-        current=createDirectNetwork();
+        current=createDirectNetwork(true);
         await current.join(code,playerName(),{roosterName:identity.roosterName,powerRating:identity.powerRating});
+        releaseKeys();resetVisuals();
         return true;
       }catch(error){
         lastError=error;
