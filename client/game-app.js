@@ -23,6 +23,8 @@
   let visual = game.state.fighters.map(f => ({x:f.x,y:f.y}));
   let particles = [], floating = [], shake = 0, seenEvent = 0;
   let resultShown = false, toastTimer = 0, isMuted = true, audio = null;
+  // Pending miss sounds by fighter; must exist before any attack event is processed.
+  const pendingAttackAudio = new Map();
   let rematchWanted = false, remoteRematchWanted = false, beforeHelpPaused = false, beforeControlsPaused = false;
   let activeCountdown = -1, lastFrame = performance.now();
   let roomRoster = null, networkHold = false, remoteFocused = true, remoteHostPaused = false;
