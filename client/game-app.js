@@ -6,6 +6,7 @@
   const names = ['Gà Điều', 'Gà Trắng'];
   const keys = new Set();
   const touchHeld = new Set(), touchPointers = new Map(), touchCounts = new Map();
+  let lastTouchInputAt=0;
   const directionPriority=['',''];
   const keyRepeatGrace=new Map(), directionTapBuffer=new Map();
   const KEY_REPEAT_GRACE_MS=140, DIRECTION_TAP_BUFFER_MS=95;
@@ -55,7 +56,10 @@
     return input;
   }
   function sendInput(){
-    if(net&&net.connected&&onlineRole==='guest')net.send({type:'input',seq:++inputSeq,keys:inputFor(0),actions:{...localActions},focused:!document.hidden});
+    if(net&&net.connected&&onlineRole==='guest'){
+      const recentlyTouched=performance.now()-lastTouchInputAt<2500;
+      net.send({type:'input',seq:++inputSeq,keys:inputFor(0),actions:{...localActions},focused:recentlyTouched||!document.hidden});
+    }
   }
   function playerName(){
     const value=$('playerName').value.trim().normalize('NFC').slice(0,24);
@@ -219,7 +223,8 @@
     else directionPriority[index]='';
   }
   function inputFor(index) {
-    if (document.hidden || $('helpDialog').open || controls.isOpen) return empty();
+    const touchActive=index===0&&touchHeld.size>0;
+    if (((document.hidden&&!touchActive) || $('helpDialog').open || controls.isOpen)) return empty();
     const input=controls.input(index,{has:code=>codeIsHeld(code)});
     if(index===0)for(const action of touchHeld)if(Object.prototype.hasOwnProperty.call(input,action))input[action]=true;
     reconcileDirectionPriority(index);
@@ -378,13 +383,15 @@
     keys.clear();keyRepeatGrace.clear();directionTapBuffer.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();directionPriority[0]='';directionPriority[1]='';
     document.querySelectorAll('.touch-key.pressed').forEach(el=>el.classList.remove('pressed'));
     if (net && net.connected && onlineRole==='guest') {
-      net.send({type:'input',seq:++inputSeq,keys:empty(),actions:{...localActions},focused:!document.hidden});
+      const recentlyTouched=performance.now()-lastTouchInputAt<2500;
+      net.send({type:'input',seq:++inputSeq,keys:empty(),actions:{...localActions},focused:recentlyTouched||!document.hidden});
     }
   }
   function touchPress(element,event){
     const action=element&&element.dataset&&element.dataset.keyAction;
     if(!action||!Object.prototype.hasOwnProperty.call(empty(),action)||touchPointers.has(event.pointerId))return;
     event.preventDefault();
+    lastTouchInputAt=performance.now();
     if(!playing||paused||disconnected||$('helpDialog').open||controls.isOpen)return;
     try{element.setPointerCapture(event.pointerId);}catch(_){}
     touchPointers.set(event.pointerId,{action,element});
@@ -396,7 +403,7 @@
   }
   function touchRelease(event){
     const active=touchPointers.get(event.pointerId);if(!active)return;
-    event.preventDefault();touchPointers.delete(event.pointerId);
+    event.preventDefault();lastTouchInputAt=performance.now();touchPointers.delete(event.pointerId);
     const count=Math.max(0,(touchCounts.get(active.action)||1)-1);
     if(count){touchCounts.set(active.action,count);}
     else{touchCounts.delete(active.action);touchHeld.delete(active.action);active.element.classList.remove('pressed');active.element.setAttribute('aria-pressed','false');}
@@ -1160,7 +1167,7 @@
     releaseKeys();if(playing&&selectedMode!=='online')togglePause(true);
   });
   document.addEventListener('visibilitychange',()=>{
-    releaseKeys();
+    if(selectedMode!=='online')releaseKeys();
     if(document.hidden&&playing&&selectedMode!=='online')togglePause(true);
     if(!document.hidden)lastLogic=performance.now();
   });
