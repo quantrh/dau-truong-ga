@@ -75,3 +75,12 @@ test('successful guest join cannot fall through to leave/fallback because of UI 
   assert.ok(join.includes("try{releaseKeys();}catch(_){}"));
   assert.ok(join.includes("try{resetVisuals();}catch(_){}"));
 });
+
+
+test('online guest touch input survives Safari hidden state',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes("const touchActive=index===0&&touchHeld.size>0"));
+  assert.ok(app.includes("focused:recentlyTouched||!document.hidden"));
+  assert.ok(app.includes("if(selectedMode!=='online')releaseKeys();"));
+  assert.ok(app.includes("lastTouchInputAt=performance.now()"));
+});
