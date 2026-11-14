@@ -94,3 +94,11 @@ test('Safari guest controls have native touch event fallback',async()=>{
   assert.ok(app.includes("addEventListener('touchend'"));
   assert.ok(app.includes("safariTouches.clear()"));
 });
+
+
+test('mobile gamepad remains hit-testable in combat on Safari',async()=>{
+  const shell=await readFile(new URL('../client/shell.html',import.meta.url),'utf8');
+  assert.ok(shell.includes(".combat-active .mobile-gamepad{position:fixed"));
+  assert.ok(shell.includes("pointer-events:auto;touch-action:none"));
+  assert.ok(shell.includes(".mobile-pad-btn{pointer-events:auto;"));
+});
