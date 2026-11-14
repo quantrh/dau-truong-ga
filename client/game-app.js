@@ -5,8 +5,8 @@
   const game = new RoosterGame({ mode: 'training' });
   const names = ['Gà Điều', 'Gà Trắng'];
   const keys = new Set();
-  const touchHeld = new Set(), touchPointers = new Map(), touchCounts = new Map();
-  let lastTouchInputAt=0;
+  const touchHeld = new Set(), touchPointers = new Map(), touchCounts = new Map(), safariTouches = new Map();
+  let lastTouchInputAt=0, lastPointerTouchAt=0;
   const directionPriority=['',''];
   const keyRepeatGrace=new Map(), directionTapBuffer=new Map();
   const KEY_REPEAT_GRACE_MS=140, DIRECTION_TAP_BUFFER_MS=95;
@@ -380,7 +380,7 @@
     updateControlLabels();
   }
   function releaseKeys() {
-    keys.clear();keyRepeatGrace.clear();directionTapBuffer.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();directionPriority[0]='';directionPriority[1]='';
+    keys.clear();keyRepeatGrace.clear();directionTapBuffer.clear();touchHeld.clear();touchPointers.clear();touchCounts.clear();safariTouches.clear();directionPriority[0]='';directionPriority[1]='';
     document.querySelectorAll('.touch-key.pressed').forEach(el=>el.classList.remove('pressed'));
     if (net && net.connected && onlineRole==='guest') {
       const recentlyTouched=performance.now()-lastTouchInputAt<2500;
@@ -392,6 +392,7 @@
     if(!action||!Object.prototype.hasOwnProperty.call(empty(),action)||touchPointers.has(event.pointerId))return;
     event.preventDefault();
     lastTouchInputAt=performance.now();
+    if(event.pointerType==='touch')lastPointerTouchAt=lastTouchInputAt;
     if(!playing||paused||disconnected||$('helpDialog').open||controls.isOpen)return;
     try{element.setPointerCapture(event.pointerId);}catch(_){}
     touchPointers.set(event.pointerId,{action,element});
@@ -410,6 +411,41 @@
     if(active.action==='left'||active.action==='right')reconcileDirectionPriority(0);
     sendInput();
   }
+  function safariTouchStart(element,event){
+    // iPhone Safari fallback for cases where Pointer Events do not reach the control pad.
+    if(performance.now()-lastPointerTouchAt<80)return;
+    const action=element&&element.dataset&&element.dataset.keyAction;
+    if(!action||!Object.prototype.hasOwnProperty.call(empty(),action))return;
+    event.preventDefault();
+    if(!playing||paused||disconnected||$('helpDialog').open||controls.isOpen)return;
+    lastTouchInputAt=performance.now();
+    for(const touch of Array.from(event.changedTouches||[])){
+      const id='touch-'+touch.identifier;
+      if(safariTouches.has(id))continue;
+      safariTouches.set(id,{action,element});
+      const count=(touchCounts.get(action)||0)+1;touchCounts.set(action,count);touchHeld.add(action);
+      if(action==='left'||action==='right')directionPriority[0]=action;
+      element.classList.add('pressed');element.setAttribute('aria-pressed','true');
+      if(count===1&&tapKeys.includes(action))localActions[action]++;
+    }
+    unlockAudio();sendInput();
+  }
+  function safariTouchEnd(event){
+    if(performance.now()-lastPointerTouchAt<80)return;
+    event.preventDefault();lastTouchInputAt=performance.now();
+    for(const touch of Array.from(event.changedTouches||[])){
+      const id='touch-'+touch.identifier,active=safariTouches.get(id);if(!active)continue;
+      safariTouches.delete(id);
+      const count=Math.max(0,(touchCounts.get(active.action)||1)-1);
+      if(count)touchCounts.set(active.action,count);
+      else{
+        touchCounts.delete(active.action);touchHeld.delete(active.action);
+        active.element.classList.remove('pressed');active.element.setAttribute('aria-pressed','false');
+      }
+      if(active.action==='left'||active.action==='right')reconcileDirectionPriority(0);
+    }
+    sendInput();
+  }
   function setupTouchControls(){
     document.querySelectorAll('.touch-key[data-key-action]').forEach(element=>{
       element.setAttribute('aria-pressed','false');
@@ -417,6 +453,9 @@
       element.addEventListener('pointerup',touchRelease);
       element.addEventListener('pointercancel',touchRelease);
       element.addEventListener('lostpointercapture',touchRelease);
+      element.addEventListener('touchstart',event=>safariTouchStart(element,event),{passive:false});
+      element.addEventListener('touchend',safariTouchEnd,{passive:false});
+      element.addEventListener('touchcancel',safariTouchEnd,{passive:false});
       element.addEventListener('contextmenu',event=>event.preventDefault());
     });
   }
