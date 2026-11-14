@@ -53,6 +53,7 @@
       this._timers = new Set();
       this._pollTimer = null;
       this._polling = false;
+      this._pollAgain = false;
       this._token = '';
       this._joined = false;
       this._gameId = '0';
@@ -182,6 +183,7 @@
       this.onLobby(room);
       if (room.status === 'playing' && !this.connected) {
         this.connected = true;
+        if (this.role === 'guest' && !gameNumber(this._gameId)) this._gameId = '1';
         this.lastPeerDataAt = Date.now();
         this.onConnect({ role: this.role, room: this.room });
       }
@@ -208,7 +210,11 @@
     }
 
     _schedulePoll(delay) {
-      if (!this._joined || this._polling) return;
+      if (!this._joined) return;
+      if (this._polling) {
+        if (delay === 0) this._pollAgain = true;
+        return;
+      }
       if (this._pollTimer !== null) this._cancelTimer(this._pollTimer);
       this._pollTimer = this._later(() => { this._pollTimer = null; this._poll(); }, delay);
     }
@@ -241,7 +247,9 @@
       } finally {
         if (generation === this._generation) {
           this._polling = false;
-          this._schedulePoll(nextDelay);
+          const flushNow = this._pollAgain;
+          this._pollAgain = false;
+          this._schedulePoll(flushNow ? 0 : nextDelay);
         }
       }
     }
@@ -261,7 +269,7 @@
       if (this.role === 'host' && (packet.type === 'state' || packet.type === 'start')) {
         let safeState;
         try { safeState = clone(packet.state); } catch (_) { return false; }
-        if (!integer(packet.seq) || !safeState || !validTree(safeState)) return false;
+        if (!integer(packet.seq) || !safeState) return false;
         if (packet.type === 'start') {
           this._gameId = String(gameNumber(this._gameId) + 1);
           this._lastInputSeq = -1;
@@ -271,7 +279,8 @@
         if (!gameNumber(this._gameId)) return false;
         this._payload.state = { type: packet.type, seq: packet.seq, gameId: this._gameId, state: safeState, paused: !!packet.paused };
       } else if (this.role === 'guest' && packet.type === 'input') {
-        if (!integer(packet.seq) || !gameNumber(this._gameId)) return false;
+        if (!integer(packet.seq)) return false;
+        if (!gameNumber(this._gameId)) this._gameId = '1';
         const keys = {}, actions = {};
         for (const key of INPUT_KEYS) keys[key] = !!(packet.keys && packet.keys[key] === true);
         for (const key of ACTION_KEYS) actions[key] = packet.actions && integer(packet.actions[key]) ? packet.actions[key] : 0;
@@ -431,6 +440,7 @@
       this._joined = false;
       this.connected = false;
       this._polling = false;
+      this._pollAgain = false;
       for (const timer of this._timers) clearTimeout(timer);
       this._timers.clear();
       this._pollTimer = null;
