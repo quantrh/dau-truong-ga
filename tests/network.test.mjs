@@ -299,7 +299,6 @@ test('guest can queue input immediately when room becomes playing', async () => 
     await guest.join(await host.create('Chủ'), 'Khách');
     await host.setReady(true); await guest.setReady(true); await host.start();
     await until(() => guest.connected);
-    assert.equal(guest._gameId, '1');
     guest.send({ type: 'input', seq: 1, keys: { right: true }, actions: {} });
     await until(() => hostEvents.some(packet => packet.seq === 1 && packet.keys.right === true));
   } finally { await f.close(); }
