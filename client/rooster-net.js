@@ -183,7 +183,6 @@
       this.onLobby(room);
       if (room.status === 'playing' && !this.connected) {
         this.connected = true;
-        if (this.role === 'guest' && !gameNumber(this._gameId)) this._gameId = '1';
         this.lastPeerDataAt = Date.now();
         this.onConnect({ role: this.role, room: this.room });
       }
@@ -280,11 +279,12 @@
         this._payload.state = { type: packet.type, seq: packet.seq, gameId: this._gameId, state: safeState, paused: !!packet.paused };
       } else if (this.role === 'guest' && packet.type === 'input') {
         if (!integer(packet.seq)) return false;
-        if (!gameNumber(this._gameId)) this._gameId = '1';
+        const outboundGameId = gameNumber(this._gameId) ? this._gameId : (this.lobby && this.lobby.status === 'playing' ? '1' : '');
+        if (!gameNumber(outboundGameId)) return false;
         const keys = {}, actions = {};
         for (const key of INPUT_KEYS) keys[key] = !!(packet.keys && packet.keys[key] === true);
         for (const key of ACTION_KEYS) actions[key] = packet.actions && integer(packet.actions[key]) ? packet.actions[key] : 0;
-        this._payload.input = { type: 'input', seq: packet.seq, gameId: this._gameId, keys, actions, focused: packet.focused !== false };
+        this._payload.input = { type: 'input', seq: packet.seq, gameId: outboundGameId, keys, actions, focused: packet.focused !== false };
       } else if (packet.type === 'rematch-request' && gameNumber(this._gameId)) {
         this._payload.control = { type: 'rematch-request', id: ++this._controlSeq, gameId: this._gameId };
       } else return false;
