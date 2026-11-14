@@ -288,3 +288,36 @@ test('real game engine receives remote movement and damage, mirrors final state,
     assert.equal(guestGame.state.phase, 'countdown');
   } finally { if (simulationTimer) clearInterval(simulationTimer); await f.close(); }
 });
+
+
+test('guest can queue input immediately when room becomes playing', async () => {
+  const f = fixture();
+  try {
+    const hostEvents = [];
+    const host = f.create({ onConnect() { host.send({ type: 'start', seq: 1, state: snapshot(405) }); }, onData(packet) { if(packet.type==='input') hostEvents.push(packet); } });
+    const guest = f.create();
+    await guest.join(await host.create('Chủ'), 'Khách');
+    await host.setReady(true); await guest.setReady(true); await host.start();
+    await until(() => guest.connected);
+    assert.equal(guest._gameId, '1');
+    guest.send({ type: 'input', seq: 1, keys: { right: true }, actions: {} });
+    await until(() => hostEvents.some(packet => packet.seq === 1 && packet.keys.right === true));
+  } finally { await f.close(); }
+});
+
+test('send during in-flight poll forces an immediate follow-up sync', async () => {
+  const f = fixture();
+  try {
+    f.state.latency = 35;
+    const hostEvents = [];
+    const host = f.create({ onConnect() { host.send({ type: 'start', seq: 1, state: snapshot(405) }); }, onData(packet) { if(packet.type==='input') hostEvents.push(packet); } });
+    const guest = f.create();
+    await guest.join(await host.create('Chủ'), 'Khách');
+    await host.setReady(true); await guest.setReady(true); await host.start();
+    await until(() => guest.connected);
+    guest._poll();
+    await pause(5);
+    guest.send({ type: 'input', seq: 2, keys: { left: true }, actions: {} });
+    await until(() => hostEvents.some(packet => packet.seq === 2 && packet.keys.left === true), 2000);
+  } finally { await f.close(); }
+});
