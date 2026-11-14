@@ -84,3 +84,13 @@ test('online guest touch input survives Safari hidden state',async()=>{
   assert.ok(app.includes("if(selectedMode!=='online')releaseKeys();"));
   assert.ok(app.includes("lastTouchInputAt=performance.now()"));
 });
+
+
+test('Safari guest controls have native touch event fallback',async()=>{
+  const app=await readFile(new URL('../client/game-app.js',import.meta.url),'utf8');
+  assert.ok(app.includes("function safariTouchStart(element,event)"));
+  assert.ok(app.includes("function safariTouchEnd(event)"));
+  assert.ok(app.includes("addEventListener('touchstart'"));
+  assert.ok(app.includes("addEventListener('touchend'"));
+  assert.ok(app.includes("safariTouches.clear()"));
+});
