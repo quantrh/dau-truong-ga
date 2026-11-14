@@ -636,7 +636,7 @@
     if(selectedMode==='online'&&net&&net.connected) {
       $('liveStatus').textContent='ONLINE · '+(net.ping===null?'ĐANG KẾT NỐI':net.ping+' MS');
     } else $('liveStatus').textContent=paused?'TẠM DỪNG':selectedMode==='training'?'TẬP MỘT MÌNH · THỂ LỰC VÔ HẠN':selectedMode==='local'?'2 NGƯỜI CÙNG MÁY':'ĐẤU VỚI MÁY';
-    if(selectedMode==='online'&&networkHold&&!resultShown){showCenter('KẾT NỐI ĐANG CHẬM','Đợi tín hiệu đối thủ…',remoteHostPaused?'Chủ phòng đang tạm dừng đồng bộ.':'Chưa nhận được heartbeat mới từ máy đối thủ. Trận sẽ tự tiếp tục khi dữ liệu trở lại.');return;}
+    if(selectedMode==='online'&&networkHold&&!resultShown){const elapsed=Math.floor((performance.now()-(onlineRole==='host'?lastRemoteInput:lastState))/1000);showCenter('MẤT ĐỒNG BỘ','Đang kết nối lại…',(onlineRole==='host'?'Chưa nhận lệnh từ máy khách. ':'Chưa nhận trạng thái từ chủ phòng. ')+elapsed+' giây · '+(net&&net.transport==='direct'?'WebRTC':'Supabase relay')+'.');return;}
     if(paused) {showCenter('NGHỈ MỘT NHỊP','Tạm dừng','Nhấn P, Esc hoặc ▶ để tiếp tục');return;}
     if(selectedMode==='online'&&onlineRole==='guest'&&performance.now()-lastState>2000&&!resultShown) {
       showCenter('KẾT NỐI CHẬM','Đang chờ…','Chờ tín hiệu từ chủ phòng');return;
@@ -707,7 +707,8 @@
     const epoch=netEpoch;
     const options={
       requestTimeout:5000,
-      forceRelay:true,
+      // Prefer WebRTC when available; keep the HTTPS relay as the fallback.
+      forceRelay:false,
       onStatus(status){
         if(epoch!==netEpoch)return;
         $('networkStatus').textContent=status.message;
