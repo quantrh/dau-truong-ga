@@ -278,7 +278,7 @@ async function readBody(req:Request){
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response("ok",{headers:corsHeaders});
   try{
-    if(req.method==="GET"&&/\\/api\\/arena\\/?$/.test(new URL(req.url).pathname))return await arenaStatus(Date.now());
+    if(req.method==="GET"&&new URL(req.url).pathname.replace(/\/$/,"").endsWith("/api/arena"))return await arenaStatus(Date.now());
     if(req.method!=="POST")return new Response(JSON.stringify({error:"Thao tác này cần gửi bằng POST.",code:"METHOD_NOT_ALLOWED"}),{status:405,headers:{...headers,Allow:"POST"}});
     const body=await readBody(req);
     const path=new URL(req.url).pathname.replace(/\/$/,"");
