@@ -27,7 +27,7 @@
       hp: 100, stamina: 100, facing: index ? -1 : 1,
       action: 'idle', actionTime: 0, hitFlash: 0, guarding: false,
       attackType: '', attackTimer: 0, attackConnected: false, aerialStrike: false,
-      hurtTimer: 0, crouchTimer: 0, peckRecoilTimer: 0, fleeTimer: 0, fledOnce: false, regenLock: 0, jumpCooldown: 0,
+      hurtTimer: 0, crouchTimer: 0, peckRecoilTimer: 0, fleeTimer: 0, fleeDirection: 0, fledOnce: false, regenLock: 0, jumpCooldown: 0,
       jumpBuffer: 0, landTimer: 0, gaitPhase: 0, moveBlend: 0,
       dashTimer: 0, dashCooldown: 0, dashDirection: index ? 1 : -1, invulnTimer: 0,
       combo: 0, comboTimer: 0, damageDone: 0, powerRating: 100
@@ -160,6 +160,7 @@
         f.attackConnected = !!f.attackConnected;
         f.aerialStrike = !!f.aerialStrike;
         f.fledOnce = !!f.fledOnce;
+        f.fleeDirection = f.fleeDirection < 0 ? -1 : f.fleeDirection > 0 ? 1 : 0;
         for (const key of ['hurtTimer', 'crouchTimer', 'peckRecoilTimer', 'fleeTimer', 'regenLock', 'jumpCooldown', 'comboTimer', 'jumpBuffer', 'landTimer', 'dashTimer', 'dashCooldown', 'invulnTimer']) f[key] = clamp(finite(f[key]), 0, 10);
         f.gaitPhase = ((finite(f.gaitPhase) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
         f.moveBlend = clamp(finite(f.moveBlend), 0, 1);
@@ -289,6 +290,7 @@
       // Once per round, a badly wounded rooster makes a brief evasive circuit before re-engaging.
       if (this.state.mode !== 'training' && f.hp > 0 && f.hp <= 23 && !f.fledOnce && f.hurtTimer <= 0) {
         f.fledOnce = true; f.fleeTimer = 2.6;
+        f.fleeDirection = f.x >= this.state.fighters[1-i].x ? 1 : -1;
         f.attackType = ''; f.attackTimer = 0; f.guarding = false;
         this._emit('flee', { fighter: i, x: f.x, hp: f.hp });
       }
@@ -305,7 +307,9 @@
       let direction = Number(input.right) - Number(input.left);
       if (f.fleeTimer > 0 && f.hurtTimer <= 0) {
         // Reverse near the rim to trace an arc around the arena without leaving the canvas.
-        direction = f.x <= MIN_X + 110 ? 1 : f.x >= MAX_X - 110 ? -1 : f.x >= other.x ? 1 : -1;
+        if(f.x <= MIN_X + 85)f.fleeDirection=1;
+        else if(f.x >= MAX_X - 85)f.fleeDirection=-1;
+        direction=f.fleeDirection || (f.x >= other.x ? 1 : -1);
         input = { ...input, kick: false, peck: false, guard: false, jump: f.y <= 0 && f.jumpCooldown <= 0 && f.fleeTimer < 1.6 && f.fleeTimer > 1.45 };
       }
       if (!f.attackType && f.hurtTimer <= 0 && f.dashTimer <= 0) {
