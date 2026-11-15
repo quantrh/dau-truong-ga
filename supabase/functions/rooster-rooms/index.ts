@@ -246,24 +246,31 @@ async function memberAction(req:Request,code:string,action:string,body:any,now:n
 }
 // Public, read-only arena board. No room credentials or session tokens are exposed.
 async function arenaStatus(now:number){
+  // Public directory: names and room availability only. Never expose session hashes or private payloads.
   const {data,error}=await admin.from("game_rooms")
     .select("code,status,host_name,host_rooster_name,guest_name,guest_rooster_name,host_seen,guest_seen,expires_at,created_at")
     .in("status",["waiting","playing"]).gt("expires_at",now)
-    .order("created_at",{ascending:false}).limit(30);
+    .order("created_at",{ascending:true}).limit(100);
   if(error)throw error;
-  const fresh=(data||[]).filter((r:any)=>
-    now-Number(r.host_seen)<12000 &&
-    (!r.guest_name||now-Number(r.guest_seen||0)<12000));
-  const playing=fresh.find((r:any)=>r.status==="playing"&&r.guest_name);
-  const paired=fresh.find((r:any)=>r.status==="waiting"&&r.guest_name);
-  const waiting=fresh.find((r:any)=>r.status==="waiting"&&!r.guest_name);
-  const selected=playing||paired||waiting;
-  if(!selected)return json({state:"empty",hostName:null,guestName:null});
-  return json({state:playing?"playing":paired?"paired":"waiting",
-    hostName:selected.host_rooster_name||selected.host_name||"Chiến kê chủ sân",
-    guestName:selected.guest_name?(selected.guest_rooster_name||selected.guest_name):null,
-    // Only a joinable waiting room publishes its join code.
-    joinCode:!playing&&!paired?selected.code:null});
+  const rooms=(data||[]).filter((r:any)=>now-Number(r.host_seen)>=0 && now-Number(r.host_seen)<12000)
+    .map((r:any)=>{
+      const guestActive=!!r.guest_name&&now-Number(r.guest_seen||0)>=0&&now-Number(r.guest_seen||0)<12000;
+      // A room with a reserved guest seat is never publicly joinable, even if the guest is briefly offline.
+      const occupied=!!r.guest_name;
+      return {
+        code:r.code,status:r.status==="playing"?"playing":occupied?"paired":"waiting",
+        hostName:r.host_rooster_name||r.host_name||"Chiến kê chủ sân",
+        guestName:occupied?(r.guest_rooster_name||r.guest_name):null,
+        players:occupied?2:1,hostOnline:true,guestOnline:guestActive,
+        joinable:r.status==="waiting"&&!occupied
+      };
+    });
+  const first=rooms.find((r:any)=>r.joinable)||rooms[0];
+  return json({rooms,count:rooms.length,playingCount:rooms.filter((r:any)=>r.status==="playing").length,
+    waitingCount:rooms.filter((r:any)=>r.joinable).length,
+    // Legacy fields for previously cached frontend versions.
+    state:first?.status||"empty",hostName:first?.hostName||null,
+    guestName:first?.guestName||null,joinCode:first?.joinable?first.code:null});
 }
 
 async function readBody(req:Request){
