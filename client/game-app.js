@@ -38,6 +38,7 @@
   let profileState=null,profileInitPromise=null;
   const inviteParams=new URLSearchParams(location.search);const invitedCode=(inviteParams.get('room')||'').trim().toUpperCase();
   let inviteAutoJoinStarted=false,onlineAutoCreating=false,onlineAutoJoining=false;
+  let arenaChecking=false,arenaPublicState='unknown',arenaBoard=null;
   function clearRemoteActions(){remotePending=freshActions();remoteRelease={jump:false,dash:false};}
   function receiveActions(raw){
     if(!raw||typeof raw!=='object')return;
@@ -73,9 +74,7 @@
   function shareURL(){
     const base=window.ROOSTER_PUBLIC_GAME_URL||(location.protocol==='http:'||location.protocol==='https:'?location.href:'https://quantrh.github.io/dau-truong-ga/');
     const u=new URL(base);u.search='';u.hash='';
-    const build=window.ROOSTER_BUILD_ID||inviteParams.get('v')||'current';
-    u.searchParams.set('v',build);
-    u.searchParams.set('room',net?net.room:$('roomCode').textContent);
+    // Share one permanent GitHub Pages HTML address, never a room-specific URL.
     return u.toString();
   }
   let hudState = '';
@@ -504,6 +503,7 @@
       btn.textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →';btn.disabled=false;return;
     }
     if(!net||!roomRoster){
+      if(arenaPublicState==='playing'||arenaPublicState==='paired'){btn.textContent='SÂN ĐANG CÓ TRẬN · ĐỢI LƯỢT';btn.disabled=true;return;}
       if(RoosterNet.validCode(invitedCode)){
         btn.textContent=onlineAutoJoining?'ĐANG VÀO PHÒNG…':'THỬ VÀO PHÒNG LẠI →';
         btn.disabled=onlineAutoJoining;
@@ -857,9 +857,40 @@
       syncMobileQuickAction();
     }
   }
+  async function loadPublicArena(){
+    if(arenaChecking||selectedMode!=='online'||!loaded)return;
+    arenaChecking=true;
+    try{
+      const response=await fetch(window.ROOSTER_ONLINE_API+'/api/arena',{cache:'no-store'});
+      if(!response.ok)throw new Error('Sảnh chưa phản hồi');
+      const board=await response.json();
+      arenaBoard=board;arenaPublicState=board.state||'empty';
+      const panel=$('publicArenaBoard');
+      if(panel){
+        panel.hidden=false;
+        const host=board.hostName||'Chưa có chiến kê';
+        const guest=board.guestName||'Đang chờ đối thủ';
+        $('arenaPublicNames').textContent=arenaPublicState==='playing'?host+' ⚔ '+guest:arenaPublicState==='paired'?host+' · '+guest:host;
+        $('arenaPublicStatus').textContent=arenaPublicState==='playing'?'ĐANG THI ĐẤU · Sân đã đủ hai người':arenaPublicState==='paired'?'ĐÃ CÓ HAI CHIẾN KÊ · Chờ bắt đầu':arenaPublicState==='waiting'?'CÓ NGƯỜI ĐANG CHỜ ĐẤU':'SÂN ĐANG TRỐNG · Mời bạn vào đấu';
+      }
+      if(!net&&!onlineAutoCreating&&!onlineAutoJoining&&!playing&&!RoosterNet.validCode(invitedCode)){
+        if(board.state==='waiting'&&RoosterNet.validCode(board.joinCode)){
+          await joinRoomCode(board.joinCode,true);
+        }else if(board.state==='empty'){
+          await hostRoom();
+        }else{
+          $('networkStatus').textContent='Sân đang có người. Bạn có thể chờ trận kết thúc để vào đấu.';
+          syncMobileQuickAction();
+        }
+      }
+    }catch(error){
+      if(!net&&!onlineAutoCreating&&!onlineAutoJoining)$('networkStatus').textContent='Không tải được trạng thái sảnh. Đang thử kết nối lại…';
+    }finally{arenaChecking=false;}
+  }
+  setInterval(()=>{if(selectedMode==='online'&&loaded)loadPublicArena();},3500);
   function maybeAutoHostOnline(){
-    if(selectedMode!=='online'||RoosterNet.validCode(invitedCode)||!loaded||net||roomRoster||onlineAutoCreating)return;
-    hostRoom();
+    if(selectedMode!=='online'||RoosterNet.validCode(invitedCode)||!loaded||net||roomRoster||onlineAutoCreating||onlineAutoJoining)return;
+    loadPublicArena();
   }
   async function joinRoomCode(code,auto=false){
     code=String(code||'').trim().toUpperCase();
@@ -924,7 +955,6 @@
     });
   }
   async function shareInvite(){
-    if(!net||!roomRoster)return;
     const url=shareURL();
     try{
       if(navigator.share){await navigator.share({title:'Đấu Trường Gà',text:'Vào phòng đấu với tôi:',url});return;}
@@ -1226,6 +1256,7 @@
     if(playing||!loaded)return;
     if(selectedMode!=='online'){beginGame(selectedMode);return;}
     if(!net||!roomRoster){
+      if(arenaPublicState==='playing'||arenaPublicState==='paired')return;
       if(RoosterNet.validCode(invitedCode)){
         joinRoomCode(invitedCode,true);
       }else{
@@ -1367,7 +1398,7 @@
   try{$('playerName').value=localStorage.getItem('rooster-player-name')||'';}catch(_){}
   const hasInviteRoom=RoosterNet.validCode(invitedCode);
   document.body.classList.toggle('invite-guest',hasInviteRoom);
-  selectMode(hasInviteRoom?'online':'training');
+  selectMode('online');
   if(hasInviteRoom){
     $('roomInput').value=invitedCode;
     $('roomEntry').hidden=true;
