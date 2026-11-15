@@ -244,6 +244,28 @@ async function memberAction(req:Request,code:string,action:string,body:any,now:n
   }
   fail(404,"NOT_FOUND","Không tìm thấy thao tác này.");
 }
+// Public, read-only arena board. No room credentials or session tokens are exposed.
+async function arenaStatus(now:number){
+  const {data,error}=await admin.from("game_rooms")
+    .select("code,status,host_name,host_rooster_name,guest_name,guest_rooster_name,host_seen,guest_seen,expires_at,created_at")
+    .in("status",["waiting","playing"]).gt("expires_at",now)
+    .order("created_at",{ascending:false}).limit(30);
+  if(error)throw error;
+  const fresh=(data||[]).filter((r:any)=>
+    now-Number(r.host_seen)<12000 &&
+    (!r.guest_name||now-Number(r.guest_seen||0)<12000));
+  const playing=fresh.find((r:any)=>r.status==="playing"&&r.guest_name);
+  const paired=fresh.find((r:any)=>r.status==="waiting"&&r.guest_name);
+  const waiting=fresh.find((r:any)=>r.status==="waiting"&&!r.guest_name);
+  const selected=playing||paired||waiting;
+  if(!selected)return json({state:"empty",hostName:null,guestName:null});
+  return json({state:playing?"playing":paired?"paired":"waiting",
+    hostName:selected.host_rooster_name||selected.host_name||"Chiến kê chủ sân",
+    guestName:selected.guest_name?(selected.guest_rooster_name||selected.guest_name):null,
+    // Only a joinable waiting room publishes its join code.
+    joinCode:!playing&&!paired?selected.code:null});
+}
+
 async function readBody(req:Request){
   const len=Number(req.headers.get("content-length")||0);
   if(len>MAX_BODY)fail(413,"BODY_TOO_LARGE","Dữ liệu kết nối quá lớn.");
@@ -256,6 +278,7 @@ async function readBody(req:Request){
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response("ok",{headers:corsHeaders});
   try{
+    if(req.method==="GET"&&/\\/api\\/arena\\/?$/.test(new URL(req.url).pathname))return await arenaStatus(Date.now());
     if(req.method!=="POST")return new Response(JSON.stringify({error:"Thao tác này cần gửi bằng POST.",code:"METHOD_NOT_ALLOWED"}),{status:405,headers:{...headers,Allow:"POST"}});
     const body=await readBody(req);
     const path=new URL(req.url).pathname.replace(/\/$/,"");
