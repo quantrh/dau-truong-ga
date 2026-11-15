@@ -39,6 +39,7 @@
   const inviteParams=new URLSearchParams(location.search);const invitedCode=(inviteParams.get('room')||'').trim().toUpperCase();
   let inviteAutoJoinStarted=false,onlineAutoCreating=false,onlineAutoJoining=false;
   let arenaChecking=false,arenaPublicState='unknown',arenaBoard=null;
+  let quickMatching=false;
   let joiningPublicRoom=false;
   function clearRemoteActions(){remotePending=freshActions();remoteRelease={jump:false,dash:false};}
   function receiveActions(raw){
@@ -504,8 +505,10 @@
       btn.textContent=selectedMode==='training'?'BẮT ĐẦU TẬP →':'BẮT ĐẦU TRẬN →';btn.disabled=false;return;
     }
     if(!net||!roomRoster){
-      if(arenaPublicState==='waiting'&&arenaBoard&&RoosterNet.validCode(arenaBoard.joinCode)){btn.textContent=onlineAutoJoining?'ĐANG VÀO SÂN…':'VÀO SÂN ĐẤU →';btn.disabled=onlineAutoJoining;return;}
-      if(arenaPublicState==='playing'||arenaPublicState==='paired'){btn.textContent='SÂN ĐANG CÓ TRẬN · ĐỢI LƯỢT';btn.disabled=true;return;}
+      if(!RoosterNet.validCode(invitedCode)){
+        btn.textContent=onlineAutoJoining||onlineAutoCreating||quickMatching?'ĐANG GHÉP TRẬN…':'GHÉP TRẬN NHANH →';
+        btn.disabled=onlineAutoJoining||onlineAutoCreating||quickMatching;return;
+      }
       if(RoosterNet.validCode(invitedCode)){
         btn.textContent=onlineAutoJoining?'ĐANG VÀO PHÒNG…':'THỬ VÀO PHÒNG LẠI →';
         btn.disabled=onlineAutoJoining;
@@ -868,39 +871,74 @@
       const response=await fetch(window.ROOSTER_ONLINE_API+'/api/arena',{cache:'no-store'});
       if(!response.ok)throw new Error('Sảnh chưa phản hồi');
       const board=await response.json();
-      arenaBoard=board;arenaPublicState=board.state||'empty';
+      arenaBoard=board;
+      const rooms=Array.isArray(board.rooms)?board.rooms:[];
+      const first=rooms.find(r=>r.joinable&&RoosterNet.validCode(r.code));
+      arenaPublicState=first?'waiting':rooms.length?'occupied':'empty';
       const panel=$('publicArenaBoard');
       if(panel){
         panel.hidden=false;
-        const host=board.hostName||'Chưa có chiến kê';
-        const guest=board.guestName||'Đang chờ đối thủ';
-        const count=board.state==='empty'?0:board.guestName?2:1;
-        if($('arenaPublicCount'))$('arenaPublicCount').textContent=count+' / 2 chiến kê';
-        if($('arenaJoinBtn')){$('arenaJoinBtn').hidden=!!net||!!playing||board.state!=='waiting'||!RoosterNet.validCode(board.joinCode);$('arenaJoinBtn').disabled=onlineAutoJoining;}
-        $('arenaPublicNames').textContent=arenaPublicState==='playing'?host+' ⚔ '+guest:arenaPublicState==='paired'?host+' · '+guest:host;
-        $('arenaPublicStatus').textContent=arenaPublicState==='playing'?'ĐANG THI ĐẤU · Sân đã đủ hai người':arenaPublicState==='paired'?'ĐÃ CÓ HAI CHIẾN KÊ · Chờ bắt đầu':arenaPublicState==='waiting'?'CÓ NGƯỜI ĐANG CHỜ ĐẤU':'SÂN ĐANG TRỐNG · Mời bạn vào đấu';
-      }
-      if(!net&&!onlineAutoCreating&&!onlineAutoJoining&&!playing&&!RoosterNet.validCode(invitedCode)){
-        if(board.state==='waiting'&&RoosterNet.validCode(board.joinCode)){
-          $('networkStatus').textContent='Đã có '+(board.hostName||'một chiến kê')+' chờ đấu. Nhấn VÀO SÂN ĐẤU để tham gia.';
-        }else if(board.state==='empty'){
-          await hostRoom();
-        }else{
-          $('networkStatus').textContent='Sân đang có người. Bạn có thể chờ trận kết thúc để vào đấu.';
-          syncMobileQuickAction();
+        $('arenaPublicStatus').textContent='SẢNH ĐẤU ONLINE · '+rooms.length+' PHÒNG';
+        $('arenaPublicCount').textContent=rooms.reduce((n,r)=>n+(r.players===2?2:1),0)+' chiến kê · '+(board.playingCount||0)+' trận đang đấu';
+        $('arenaPublicNames').textContent=first?'Có '+(board.waitingCount||1)+' sân đang chờ đối thủ':rooms.length?'Các sân đang có người':'Chưa có phòng đấu. Bạn có thể tạo sân mới.';
+        if($('arenaJoinBtn'))$('arenaJoinBtn').hidden=true;
+        const listing=$('arenaRoomList');
+        if(listing){
+          listing.replaceChildren();
+          for(const room of rooms){
+            if(!RoosterNet.validCode(room.code))continue;
+            const card=document.createElement('div');card.className='arena-room-item';
+            const heading=document.createElement('div');heading.className='arena-room-heading';
+            const label=document.createElement('b');label.textContent='SÂN '+room.code;
+            const occupancy=document.createElement('span');occupancy.textContent=(room.players===2?2:1)+'/2 người';
+            heading.append(label,occupancy);
+            const names=document.createElement('div');names.className='arena-room-names';
+            names.textContent=(room.hostName||'Chủ phòng')+(room.guestName?'  ⚔  '+room.guestName:'  ·  Chờ đối thủ');
+            const status=document.createElement('div');status.className='arena-room-status';
+            status.textContent=room.status==='playing'?'● ĐANG THI ĐẤU':room.status==='paired'?'● ĐỦ HAI NGƯỜI · CHỜ BẮT ĐẦU':'● ĐANG CHỜ ĐẤU';
+            card.append(heading,names,status);
+            if(room.joinable&&!net&&!playing){
+              const join=document.createElement('button');join.type='button';join.className='secondary arena-join-room';
+              join.textContent='VÀO PHÒNG NÀY →';join.dataset.roomCode=room.code;
+              join.disabled=onlineAutoJoining;card.append(join);
+            }
+            listing.append(card);
+          }
         }
+      }
+      if(!net&&!onlineAutoCreating&&!onlineAutoJoining&&!playing){
+        $('networkStatus').textContent=first?'Có phòng đang chờ. Chọn VÀO PHÒNG hoặc GHÉP TRẬN NHANH.':'Bạn có thể tạo phòng mới hoặc chờ một phòng trống.';
+        syncMobileQuickAction();
       }
     }catch(error){
       if(!net&&!onlineAutoCreating&&!onlineAutoJoining)$('networkStatus').textContent='Không tải được trạng thái sảnh. Đang thử kết nối lại…';
     }finally{arenaChecking=false;}
   }
   setInterval(()=>{if(selectedMode==='online'&&loaded)loadPublicArena();},3500);
-  if($('arenaJoinBtn'))$('arenaJoinBtn').addEventListener('click',()=>{
-    const code=arenaBoard&&arenaBoard.joinCode;
-    if(joiningPublicRoom||!RoosterNet.validCode(code))return;
-    joiningPublicRoom=true;$('arenaJoinBtn').disabled=true;
-    joinRoomCode(code,false).then(ok=>{if(!ok)loadPublicArena();}).catch(e=>toast(e.message)).finally(()=>{joiningPublicRoom=false;});
+  async function enterPublicRoom(code){
+    if(joiningPublicRoom||net||playing||!RoosterNet.validCode(code))return;
+    joiningPublicRoom=true;
+    try{const ok=await joinRoomCode(code,false);if(!ok)await loadPublicArena();}
+    catch(e){toast(e.message);}
+    finally{joiningPublicRoom=false;syncMobileQuickAction();}
+  }
+  async function quickMatch(){
+    if(!loaded||net||playing||onlineAutoCreating||onlineAutoJoining||quickMatching)return;
+    quickMatching=true;syncMobileQuickAction();
+    try{
+      await loadPublicArena();
+      const room=arenaBoard&&Array.isArray(arenaBoard.rooms)?arenaBoard.rooms.find(r=>r.joinable&&RoosterNet.validCode(r.code)):null;
+      if(room)await enterPublicRoom(room.code);
+      else await hostRoom();
+    }finally{quickMatching=false;syncMobileQuickAction();}
+  }
+  if($('arenaRoomList'))$('arenaRoomList').addEventListener('click',event=>{
+    const button=event.target.closest('button[data-room-code]');
+    if(button)enterPublicRoom(button.dataset.roomCode);
   });
+  if($('arenaCreateBtn'))$('arenaCreateBtn').addEventListener('click',()=>{if(!net&&!playing)hostRoom();});
+  if($('arenaQuickBtn'))$('arenaQuickBtn').addEventListener('click',quickMatch);
+  if($('arenaJoinBtn'))$('arenaJoinBtn').addEventListener('click',()=>quickMatch());
   function maybeAutoHostOnline(){
     if(selectedMode!=='online'||RoosterNet.validCode(invitedCode)||!loaded||net||roomRoster||onlineAutoCreating||onlineAutoJoining)return;
     loadPublicArena();
@@ -1277,13 +1315,10 @@
     if(playing||!loaded)return;
     if(selectedMode!=='online'){beginGame(selectedMode);return;}
     if(!net||!roomRoster){
-      if(arenaPublicState==='waiting'&&arenaBoard&&RoosterNet.validCode(arenaBoard.joinCode)){joinRoomCode(arenaBoard.joinCode,false).then(ok=>{if(!ok)loadPublicArena();});return;}
-      if(arenaPublicState==='playing'||arenaPublicState==='paired')return;
       if(RoosterNet.validCode(invitedCode)){
         joinRoomCode(invitedCode,true);
       }else{
-        onlineAutoCreating=false;
-        maybeAutoHostOnline();
+        quickMatch();
       }
       return;
     }
