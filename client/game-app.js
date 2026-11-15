@@ -999,7 +999,7 @@
     }else{v.x=f.x;v.y=f.y;}
     let x=v.x, altitude=v.y;
     if(!playing&&!disconnected){x=index?965:315;altitude=0;}
-    const moving=f.action==='walk'&&f.y<2;
+    const moving=(f.action==='walk'||f.fleeTimer>0)&&f.y<2;
     const phase=Number.isFinite(f.gaitPhase)?f.gaitPhase:time*10;
     const moveBlend=Number.isFinite(f.moveBlend)?f.moveBlend:Math.min(1,Math.abs(f.vx)/310);
     const reverse=f.vx*f.facing<0;
@@ -1012,20 +1012,21 @@
     let squash=f.action==='guard'?.11:0;
     let bob=moving?Math.abs(Math.sin(phase*2))*3*moveBlend:Math.sin(time*2.4+index)*.8;
     if(f.action==='peck'){
-      const progress=Math.min(1,f.attackTimer/.43),arc=Math.sin(progress*Math.PI);
+      const progress=Math.min(1,f.attackTimer/.52),arc=Math.sin(progress*Math.PI);
       pose=progress>.15&&progress<.86?'peck':'idle';
       if(airborne){
         airAttack='peck';airAttackPower=arc;
         lunge=arc*34;lean-=arc*.22;squash-=arc*.035;lift+=arc*11;
       }else{
-        lunge=arc*16;squash+=arc*.035;
+        lunge=arc*31;lean-=arc*.16;squash+=arc*.10;bob-=arc*8;
       }
     }else if(f.action==='kick'){
-      const progress=Math.min(1,f.attackTimer/.7),arc=Math.sin(progress*Math.PI);
+      const progress=Math.min(1,f.attackTimer/.76),arc=Math.sin(progress*Math.PI);
       pose=progress>.14&&progress<.88?'kick':'idle';
       if(airborne){
         airAttack='kick';airAttackPower=arc;
-        lift=arc*50;lean-=arc*.26;lunge=arc*34;squash-=arc*.06;
+        lift=arc*62;lean-=arc*.38;lunge=arc*55;squash-=arc*.09;
+        if(f.aerialStrike){lift-=progress*55;lean+=progress*.24;lunge+=progress*30;bob-=arc*8;}
       }else{
         lift=arc*37;lean-=arc*.065;lunge=arc*18;
         if(progress<.2)squash+=Math.sin(progress/.2*Math.PI)*.09;
@@ -1046,12 +1047,15 @@
       lunge-=f.dashDirection*5;
       scale*=.96;
     }else if(f.action==='hurt'){
-      const impact=Math.min(1,Math.max(.18,f.hurtTimer/.36));
+      const impact=Math.min(1,Math.max(.18,f.hurtTimer/.75));
       const recoil=Math.min(1,Math.abs(f.vx)/430);
       lean=-.14-.17*impact;squash=-.035-.05*impact;bob=-3-5*impact;
-      lunge-=Math.min(24,8+recoil*18);
+      lunge-=Math.min(33,9+recoil*22);
+      if(f.crouchTimer>0){const stagger=Math.min(1,f.crouchTimer/.82);squash+=.38*stagger;bob-=26*stagger;lean-=.16*stagger;}
+      if(f.peckRecoilTimer>0){const pull=Math.min(1,f.peckRecoilTimer/.32);lunge-=16*pull;lean-=.11*pull;bob-=5*pull;}
       lift+=Math.max(0,Math.min(16,f.y*.08));
     }else if(f.action==='win')bob=Math.abs(Math.sin(time*4))*7;
+    if(f.fleeTimer>0){bob+=Math.abs(Math.sin(phase*2))*9;lean+=.07*Math.sin(phase);scale*=.96;}
     if(f.landTimer>0)squash+=.1*Math.sin(Math.min(1,f.landTimer/.16)*Math.PI);
     const ease=1-Math.exp(-24*dt);
     v.lean=(v.lean||0)+(lean-(v.lean||0))*ease;
@@ -1098,7 +1102,7 @@
       ctx.strokeStyle='#332716';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-16,-35);ctx.lineTo(-26,8);ctx.moveTo(10,-35);ctx.lineTo(18,8);ctx.stroke();
       ctx.restore();
     };
-    if(f.dashTimer>0&&!reduced){
+    if((f.dashTimer>0||f.fleeTimer>0)&&!reduced){
       for(let trail=2;trail>0;trail--){
         ctx.save();ctx.globalAlpha=.045*(3-trail);ctx.translate(-f.dashDirection*f.facing*trail*19,0);draw();ctx.restore();
       }
