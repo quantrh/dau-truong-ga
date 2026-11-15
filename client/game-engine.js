@@ -7,8 +7,8 @@
   const PHASES = ['countdown', 'fight', 'roundEnd', 'matchEnd'];
   const ACTIONS = ['idle', 'walk', 'jump', 'peck', 'kick', 'guard', 'dash', 'hurt', 'win'];
   const ATTACKS = {
-    peck: { start: 0.105, active: 0.105, total: 0.43, cost: 11, damage: 9, range: 148, height: 112, push: 215 },
-    kick: { start: 0.075, active: 0.15, total: 0.70, cost: 25, damage: 21, range: 184, height: 151, push: 430 }
+    peck: { start: 0.105, active: 0.13, total: 0.52, cost: 11, damage: 5, range: 155, height: 120, push: 240 },
+    kick: { start: 0.075, active: 0.21, total: 0.76, cost: 25, damage: 12, range: 190, height: 185, push: 420 }
   };
   const DASH = { duration: 0.18, cooldown: 0.8, cost: 18, speed: 660, invulnerable: 0.1 };
   const emptyInput = () => ({ left: false, right: false, jump: false, peck: false, kick: false, guard: false, dash: false });
@@ -26,8 +26,8 @@
       id: index, x: index ? 875 : 405, y: 0, vx: 0, vy: 0,
       hp: 100, stamina: 100, facing: index ? -1 : 1,
       action: 'idle', actionTime: 0, hitFlash: 0, guarding: false,
-      attackType: '', attackTimer: 0, attackConnected: false,
-      hurtTimer: 0, regenLock: 0, jumpCooldown: 0,
+      attackType: '', attackTimer: 0, attackConnected: false, aerialStrike: false,
+      hurtTimer: 0, crouchTimer: 0, peckRecoilTimer: 0, fleeTimer: 0, fledOnce: false, regenLock: 0, jumpCooldown: 0,
       jumpBuffer: 0, landTimer: 0, gaitPhase: 0, moveBlend: 0,
       dashTimer: 0, dashCooldown: 0, dashDirection: index ? 1 : -1, invulnTimer: 0,
       combo: 0, comboTimer: 0, damageDone: 0, powerRating: 100
@@ -37,7 +37,7 @@
   class RoosterGame {
     constructor(options = {}) {
       if (typeof options === 'string') options = { mode: options };
-      this.roundSeconds = clamp(finite(options.roundSeconds, 75), 15, 180);
+      this.roundSeconds = clamp(finite(options.roundSeconds, 150), 15, 300);
       this.difficulty = ['easy', 'normal', 'hard'].includes(options.difficulty) ? options.difficulty : 'normal';
       this._seed = ((options.seed || Date.now()) >>> 0) || 1;
       this._eventSeq = 0;
@@ -128,7 +128,7 @@
       safe.elapsed = Math.max(0, finite(safe.elapsed));
       safe.round = clamp(Math.floor(finite(safe.round, 1)), 1, 10000);
       safe.roundTime = clamp(finite(safe.roundTime), 0, 180);
-      safe.roundSeconds = clamp(finite(safe.roundSeconds, 75), 15, 180);
+      safe.roundSeconds = clamp(finite(safe.roundSeconds, 150), 15, 300);
       safe.wins = safe.wins.map(v => clamp(Math.floor(finite(v)), 0, 2));
       safe.roundWinner = [-1, 0, 1].includes(safe.roundWinner) ? safe.roundWinner : -1;
       safe.matchWinner = [-1, 0, 1].includes(safe.matchWinner) ? safe.matchWinner : -1;
@@ -158,7 +158,9 @@
         f.attackType = ATTACKS[f.attackType] ? f.attackType : '';
         f.attackTimer = clamp(finite(f.attackTimer), 0, 2);
         f.attackConnected = !!f.attackConnected;
-        for (const key of ['hurtTimer', 'regenLock', 'jumpCooldown', 'comboTimer', 'jumpBuffer', 'landTimer', 'dashTimer', 'dashCooldown', 'invulnTimer']) f[key] = clamp(finite(f[key]), 0, 10);
+        f.aerialStrike = !!f.aerialStrike;
+        f.fledOnce = !!f.fledOnce;
+        for (const key of ['hurtTimer', 'crouchTimer', 'peckRecoilTimer', 'fleeTimer', 'regenLock', 'jumpCooldown', 'comboTimer', 'jumpBuffer', 'landTimer', 'dashTimer', 'dashCooldown', 'invulnTimer']) f[key] = clamp(finite(f[key]), 0, 10);
         f.gaitPhase = ((finite(f.gaitPhase) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
         f.moveBlend = clamp(finite(f.moveBlend), 0, 1);
         f.dashDirection = f.dashDirection < 0 ? -1 : 1;
@@ -281,6 +283,15 @@
       f.dashTimer = Math.max(0, f.dashTimer - dt);
       f.dashCooldown = Math.max(0, f.dashCooldown - dt);
       f.invulnTimer = Math.max(0, f.invulnTimer - dt);
+      f.crouchTimer = Math.max(0, f.crouchTimer - dt);
+      f.peckRecoilTimer = Math.max(0, f.peckRecoilTimer - dt);
+      f.fleeTimer = Math.max(0, f.fleeTimer - dt);
+      // Once per round, a badly wounded rooster makes a brief evasive circuit before re-engaging.
+      if (this.state.mode !== 'training' && f.hp > 0 && f.hp <= 23 && !f.fledOnce && f.hurtTimer <= 0) {
+        f.fledOnce = true; f.fleeTimer = 2.6;
+        f.attackType = ''; f.attackTimer = 0; f.guarding = false;
+        this._emit('flee', { fighter: i, x: f.x, hp: f.hp });
+      }
       if (input.jump && !this._previous[i].jump) f.jumpBuffer = 0.11;
       f.hurtTimer = Math.max(0, f.hurtTimer - dt);
       f.comboTimer = Math.max(0, f.comboTimer - dt);
@@ -291,13 +302,18 @@
           f.attackType = ''; f.attackTimer = 0; f.attackConnected = false;
         }
       }
-      const direction = Number(input.right) - Number(input.left);
+      let direction = Number(input.right) - Number(input.left);
+      if (f.fleeTimer > 0 && f.hurtTimer <= 0) {
+        // Reverse near the rim to trace an arc around the arena without leaving the canvas.
+        direction = f.x <= MIN_X + 110 ? 1 : f.x >= MAX_X - 110 ? -1 : f.x >= other.x ? 1 : -1;
+        input = { ...input, kick: false, peck: false, guard: false, jump: f.y <= 0 && f.jumpCooldown <= 0 && f.fleeTimer < 1.6 && f.fleeTimer > 1.45 };
+      }
       if (!f.attackType && f.hurtTimer <= 0 && f.dashTimer <= 0) {
         if (this.state.mode === 'training' && direction) f.facing = direction > 0 ? 1 : -1;
         else if (this.state.mode !== 'training') f.facing = other.x >= f.x ? 1 : -1;
       }
       f.guarding = input.guard && f.y <= 1 && !f.attackType && f.hurtTimer <= 0 && f.stamina > 3 && f.dashTimer <= 0;
-      const speed = f.guarding ? 115 : f.attackType ? 80 : 310;
+      const speed = f.fleeTimer > 0 ? 440 : f.guarding ? 115 : f.attackType ? 80 : 310;
       if (f.hurtTimer <= 0) {
         if (input.dash && !this._previous[i].dash && f.y === 0 && f.vy === 0 &&
             f.dashTimer <= 0 && f.dashCooldown <= 0 && !f.attackType && f.stamina >= DASH.cost) {
@@ -320,21 +336,22 @@
         }
         if (f.jumpBuffer > 0 && f.y === 0 && f.jumpCooldown <= 0 && !f.guarding &&
             !f.attackType && f.dashTimer <= 0 && f.stamina >= 9) {
-          f.vy = 700; f.stamina -= 9; f.regenLock = 0.45; f.jumpCooldown = 0.3;
+          f.vy = 805; f.stamina -= 9; f.regenLock = 0.45; f.jumpCooldown = 0.3;
           f.jumpBuffer = 0; f.landTimer = 0;
           this._emit('jump', { fighter: i, x: f.x });
         }
         if (!f.attackType && !f.guarding && f.dashTimer <= 0) {
           const kind = input.kick ? 'kick' : input.peck ? 'peck' : '';
           if (kind && f.stamina >= ATTACKS[kind].cost) {
-            f.attackType = kind; f.attackTimer = 0; f.attackConnected = false;
+            f.attackType = kind; f.attackTimer = 0; f.attackConnected = false; f.aerialStrike = kind === 'kick' && f.y > 25;
             f.stamina -= ATTACKS[kind].cost; f.regenLock = 0.55;
             if (this.state.mode === 'training') {
               if (direction) f.facing = direction > 0 ? 1 : -1;
             } else f.facing = other.x >= f.x ? 1 : -1;
             const attackStep = kind === 'kick' ? 24 : 14;
             f.x = clamp(f.x + f.facing * attackStep, MIN_X, MAX_X);
-            f.vx += f.facing * (kind === 'kick' ? 190 : 95);
+            f.vx += f.facing * (kind === 'kick' ? (f.aerialStrike ? 290 : 190) : 150);
+            if (f.aerialStrike) f.vy = Math.min(f.vy, -260); // diving downward foot-first
             this._setAction(f, kind);
             this._emit('attack', { fighter: i, kind });
           }
@@ -385,9 +402,9 @@
     }
 
     _hit({ a, b, attack, kind }) {
-      const airborne = a.y > 20;
+      const airborne = a.y > 20 || a.aerialStrike;
       const distance = Math.abs(b.x - a.x);
-      const airBonus = airborne ? (kind === 'kick' ? 4 : 2) : 0;
+      const airBonus = airborne ? (kind === 'kick' ? 3 : 1) : 0;
       const distanceRatio = clamp(distance / attack.range, 0, 1);
       // Close contact hits harder; grazing the edge of attack range does less damage.
       const distanceMultiplier = 1.22 - 0.40 * distanceRatio;
@@ -412,7 +429,9 @@
       const contactPush = attack.push * (airborne ? (kind === 'kick' ? 1.14 : 1.08) : 1);
       b.vx = a.facing * contactPush * (blocked ? 0.34 : 1);
       if (!blocked) {
-        b.hurtTimer = guardBreak ? 0.65 : kind === 'kick' ? 0.36 : 0.20;
+        b.hurtTimer = guardBreak ? 0.65 : kind === 'kick' ? (airborne ? 0.75 : 0.44) : 0.30;
+        if (kind === 'kick' && airborne) b.crouchTimer = 0.82;
+        if (kind === 'peck') b.peckRecoilTimer = 0.32;
         b.attackType = ''; b.attackTimer = 0; b.attackConnected = false;
         b.dashTimer = 0; b.invulnTimer = 0;
         this._setAction(b, 'hurt');
@@ -420,7 +439,7 @@
         const shove = kind === 'kick' ? (airborne ? 30 : 24) : (airborne ? 16 : 12);
         b.x = clamp(b.x + a.facing * shove, MIN_X, MAX_X);
         a.x = clamp(a.x - a.facing * (kind === 'kick' ? 5 : 2), MIN_X, MAX_X);
-        if (kind === 'kick') b.vy = Math.max(b.vy, airborne ? 165 : 115);
+        if (kind === 'kick') b.vy = airborne ? Math.min(b.vy, 45) : Math.max(b.vy, 80);
         else if (b.y > 0) b.vy = Math.max(b.vy, 65);
         a.vx -= a.facing * (kind === 'kick' ? 72 : 24);
         a.combo = a.comboTimer > 0 ? a.combo + 1 : 1;
@@ -429,7 +448,7 @@
       this._emit(guardBreak ? 'guardBreak' : blocked ? 'block' : 'hit', {
         fighter: a.id, target: b.id, kind, damage: Math.round(damage * 10) / 10,
         x: (a.x + b.x) / 2, y: Math.max(a.y, b.y) + 95, combo: a.combo,
-        aerial: airborne, powerRating: a.powerRating, distance: Math.round(distance), distanceMultiplier: Math.round(distanceMultiplier*100)/100
+        aerial: airborne, stomp: airborne && kind === 'kick', powerRating: a.powerRating, distance: Math.round(distance), distanceMultiplier: Math.round(distanceMultiplier*100)/100
       });
     }
 
@@ -438,7 +457,7 @@
       s.roundWinner = winner; s.resultReason = reason;
       if (winner >= 0) s.wins[winner]++;
       for (const f of s.fighters) {
-        f.attackType = ''; f.guarding = false; f.hurtTimer = 0;
+        f.attackType = ''; f.guarding = false; f.hurtTimer = 0; f.fleeTimer = 0; f.crouchTimer = 0; f.peckRecoilTimer = 0;
         f.dashTimer = 0; f.invulnTimer = 0; f.jumpBuffer = 0;
         this._setAction(f, f.id === winner ? 'win' : 'idle');
       }
